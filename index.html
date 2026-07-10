@@ -496,8 +496,8 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 <script>
-  // ⚠️ GANTI VALUE DI BAWAH INI DENGAN URL DEPLOYMENT WEB APP GOOGLE APPS SCRIPT ANDA
-  const API_URL = "https://script.google.com/macros/s/AKfycbw7o57RDEHgpuKdYWtysY_94vVEDhzAOu-b_EK0oUH0znTcWc3rr6S7Jj2E1NQgRpAV/exec";
+  // ⚠️ URL DEPLOYMENT API WEB APP GOOGLE APPS SCRIPT ANDA
+  const API_URL = "https://script.google.com/macros/s/AKfycbw8mT3MUgQ7GRQannnyDuHh3FTCMK_9JBE8vrJAnhfyBhsOJV2fi_2k-Goa3k5ZX0n5/exec";
 
   let menu = []; let cart = []; let isSyncing = false; let currentCategory1 = 'Semua'; let currentCategory2 = 'Semua'; let totalBelanjaGlobal = 0;
   let bypassModeActive = false; let isOwnerAuthenticated = false; let dataGlobalRekapKirim = {}; let dataOpnameLokalRaw = [];
@@ -665,21 +665,50 @@
     });
   }
 
+  /* REFACTOR OFFLINE MODE: Mengaktifkan local backup database menu */
   function loadMenuDariSheets() {
     fetch(`${API_URL}?aksi=ambilMenu`)
       .then(res => res.json())
       .then(dataMenu => { 
-        menu = dataMenu; 
-        renderCategory1Buttons(); 
-        filterCategory1('Semua'); 
+        if (dataMenu && dataMenu.length > 0) {
+          menu = dataMenu; 
+          localStorage.setItem('pos_menu_backup', JSON.stringify(dataMenu)); // Amankan salinan ke lokal device
+          renderCategory1Buttons(); 
+          filterCategory1('Semua'); 
+        } else {
+          loadMenuOfflineFallback();
+        }
       }).catch(err => {
-        Swal.fire('Offline Mode', 'Gagal menyambung ke server, memuat database cadangan lokal.', 'info');
+        loadMenuOfflineFallback();
       });
+  }
+
+  function loadMenuOfflineFallback() {
+    const localBackup = localStorage.getItem('pos_menu_backup');
+    if (localBackup) {
+      menu = JSON.parse(localBackup);
+      Swal.fire({
+        icon: 'info',
+        title: 'POS Berjalan Offline',
+        text: 'Menggunakan database cadangan lokal. Anda tetap bisa bertransaksi, data otomatis sync saat internet aktif.',
+        timer: 3500,
+        showConfirmButton: false
+      });
+      renderCategory1Buttons(); 
+      filterCategory1('Semua'); 
+    } else {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Koneksi Offline',
+        text: 'Aplikasi belum pernah memuat data menu saat online. Harap hubungkan internet sekali untuk mengunduh database gerai.'
+      });
+    }
   }
 
   function renderCategory1Buttons() {
     const btnArea = document.getElementById('cat1ButtonArea');
-    const kategori1Unik = ['Semua', ...new Set(menu.map(item => item.cat1))];
+    if (!btnArea) return;
+    const kategori1Unik = ['Semua', ...new Set(menu.map(item => item.cat1).filter(Boolean))];
     btnArea.innerHTML = '';
     kategori1Unik.forEach(cat1 => {
       let activeClass = (cat1 === currentCategory1) ? 'active' : '';
@@ -693,7 +722,7 @@
       btn.classList.remove('active');
       if(btn.innerText.toLowerCase() === cat1.toLowerCase()) btn.classList.add('active');
     });
-    const subCats = [...new Set(menu.filter(item => item.cat1.toLowerCase() === cat1.toLowerCase() && item.cat2 && item.cat2.trim() !== "").map(item => item.cat2))];
+    const subCats = [...new Set(menu.filter(item => item.cat1 && item.cat1.toLowerCase() === cat1.toLowerCase() && item.cat2 && item.cat2.trim() !== "").map(item => item.cat2))];
     const subBar = document.getElementById('category2Bar');
     if (cat1 !== 'Semua' && subCats.length > 0) {
       subBar.style.setProperty('display', 'flex', 'important');
@@ -711,16 +740,32 @@
     }); 
   }
 
+  /* REFACTOR RENDER ENGINE: Mengamankan loop data string dari crash format */
   function renderMenu() {
-    const grid = document.getElementById('menuGrid'); grid.innerHTML = '';
-    const query = document.getElementById('menuSearchInput').value.toLowerCase();
-    let filtered = menu;
-    if (currentCategory1 !== 'Semua') filtered = filtered.filter(x => x.cat1.toLowerCase() === currentCategory1.toLowerCase());
-    if (currentCategory2 !== 'Semua') filtered = filtered.filter(x => x.cat2.toLowerCase() === currentCategory2.toLowerCase());
-    if (query) filtered = filtered.filter(x => x.item.toLowerCase().includes(query));
+    const grid = document.getElementById('menuGrid'); 
+    if (!grid) return;
+    grid.innerHTML = '';
+    
+    const query = document.getElementById('menuSearchInput')?.value.toLowerCase() || '';
+    let filtered = menu || [];
+    
+    if (currentCategory1 !== 'Semua') {
+      filtered = filtered.filter(x => x.cat1 && x.cat1.toString().toLowerCase() === currentCategory1.toLowerCase());
+    }
+    if (currentCategory2 !== 'Semua') {
+      filtered = filtered.filter(x => x.cat2 && x.cat2.toString().toLowerCase() === currentCategory2.toLowerCase());
+    }
+    if (query) {
+      filtered = filtered.filter(x => x.item && x.item.toString().toLowerCase().includes(query));
+    }
     
     const favorites = JSON.parse(localStorage.getItem('pos_favorites') || '[]');
     filtered.sort((a, b) => (favorites.includes(b.item) ? 1 : 0) - (favorites.includes(a.item) ? 1 : 0));
+    
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div class="col-12 text-center text-muted py-4">Tidak ada menu yang cocok.</div>';
+      return;
+    }
     
     filtered.forEach((x) => {
       const globalIndex = menu.findIndex(m => m.item === x.item);
@@ -730,22 +775,21 @@
       let judulAksi = isOwnerAuthenticated ? "Upload Gambar Produk" : "Favoritkan";
       
       let iconClass = "fa-utensils";
-      const catLower = x.cat1.toLowerCase();
+      const catLower = x.cat1 ? x.cat1.toString().toLowerCase() : '';
       if(catLower.includes('ayam') || catLower.includes('geprek')) iconClass = "fa-drumstick-bite";
       else if(catLower.includes('minum') || catLower.includes('teh') || catLower.includes('es')) iconClass = "fa-glass-water";
       else if(catLower.includes('kopi')) iconClass = "fa-mug-hot";
       else if(catLower.includes('mama') || catLower.includes('mamah')) iconClass = "fa-bowl-food";
       
       let mediaHtml = `<div class="menu-icon-fallback" id="fallbackFallback-${globalIndex}"><i class="fas ${iconClass}"></i></div>`;
-      if (x.imageUrl && x.imageUrl.trim() !== "") {
-        mediaHtml = `<img src="${x.imageUrl.trim()}" alt="${x.item}" referrerpolicy="no-referrer" id="menuImgDOM-${globalIndex}" style="display:none;" onload="document.getElementById('menuImgDOM-${globalIndex}').style.display='block'; document.getElementById('fallbackFallback-${globalIndex}').style.display='none';" onerror="document.getElementById('menuImgDOM-${globalIndex}').style.display='none'; document.getElementById('fallbackFallback-${globalIndex}').style.display='flex';">
+      if (x.imageUrl && x.imageUrl.toString().trim() !== "" && x.imageUrl.toString().startsWith('http')) {
+        mediaHtml = `<img src="${x.imageUrl.toString().trim()}" alt="${x.item}" referrerpolicy="no-referrer" id="menuImgDOM-${globalIndex}" style="display:none;" onload="document.getElementById('menuImgDOM-${globalIndex}').style.display='block'; document.getElementById('fallbackFallback-${globalIndex}').style.display='none';" onerror="document.getElementById('menuImgDOM-${globalIndex}').style.display='none'; document.getElementById('fallbackFallback-${globalIndex}').style.display='flex';">
                      <div class="menu-icon-fallback" id="fallbackFallback-${globalIndex}"><i class="fas ${iconClass}"></i></div>`;
       }
-      grid.innerHTML += `<div class="col-6 col-sm-4 col-md-3"><div class="card menu-card h-100"><span class="fav-star" title="${judulAksi}" onclick="toggleFavorite('${x.item}', event)"><i class="fas ${iconAksiClass}"></i></span><div class="menu-img-container" onclick="addToCart(${globalIndex})">${mediaHtml}</div><div class="card-body p-2 text-center d-flex flex-column justify-content-between" onclick="addToCart(${globalIndex})"><div><span class="badge bg-light text-muted badge-cat mb-1 d-inline-block">${x.cat1}</span><h6>${x.item}</h6></div><p class="price-tag mb-0">Rp ${Number(x.harga).toLocaleString('id-ID')}</p></div></div></div>`;
+      grid.innerHTML += `<div class="col-6 col-sm-4 col-md-3"><div class="card menu-card h-100"><span class="fav-star" title="${judulAksi}" onclick="toggleFavorite('${x.item}', event)"><i class="fas ${iconAksiClass}"></i></span><div class="menu-img-container" onclick="addToCart(${globalIndex})">${mediaHtml}</div><div class="card-body p-2 text-center d-flex flex-column justify-content-between" onclick="addToCart(${globalIndex})"><div><span class="badge bg-light text-muted badge-cat mb-1 d-inline-block">${x.cat1 || 'Umum'}</span><h6>${x.item}</h6></div><p class="price-tag mb-0">Rp ${(Number(x.harga) || 0).toLocaleString('id-ID')}</p></div></div></div>`;
     });
   }
 
-  /* FIX FITUR UPLOAD */
   function toggleFavorite(itemName, event) { 
     if (event) event.stopPropagation(); 
     if (isOwnerAuthenticated) {
@@ -791,7 +835,6 @@
     }
   }
 
-  /* REFACTOR DASBOR PENJUALAN OWNER */
   function renderOwnerDashboard() {
     let history = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
     let totalOmzet = 0; let totalTunai = 0; let totalNonTunai = 0; let totalQty = 0;
