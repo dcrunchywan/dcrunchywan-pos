@@ -670,14 +670,13 @@
     });
   }
 
-  /* REFACTOR OFFLINE MODE: Mengaktifkan local backup database menu */
   function loadMenuDariSheets() {
     fetch(`${API_URL}?aksi=ambilMenu`)
       .then(res => res.json())
       .then(dataMenu => { 
         if (dataMenu && dataMenu.length > 0) {
           menu = dataMenu; 
-          localStorage.setItem('pos_menu_backup', JSON.stringify(dataMenu)); // Amankan salinan ke lokal device
+          localStorage.setItem('pos_menu_backup', JSON.stringify(dataMenu));
           renderCategory1Buttons(); 
           filterCategory1('Semua'); 
         } else {
@@ -702,11 +701,7 @@
       renderCategory1Buttons(); 
       filterCategory1('Semua'); 
     } else {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Koneksi Offline',
-        text: 'Aplikasi belum pernah memuat data menu saat online. Harap hubungkan internet sekali untuk mengunduh database gerai.'
-      });
+      Swal.fire({ icon: 'warning', title: 'Koneksi Offline', text: 'Aplikasi belum pernah memuat data menu saat online.' });
     }
   }
 
@@ -745,7 +740,6 @@
     }); 
   }
 
-  /* REFACTOR RENDER ENGINE: Mengamankan loop data string dari crash format */
   function renderMenu() {
     const grid = document.getElementById('menuGrid'); 
     if (!grid) return;
@@ -800,7 +794,6 @@
     if (isOwnerAuthenticated) {
       const inputUploader = document.getElementById('hiddenGlobalFileUploader');
       inputUploader.value = ""; 
-      
       const newUploader = inputUploader.cloneNode(true);
       inputUploader.parentNode.replaceChild(newUploader, inputUploader);
       
@@ -808,7 +801,6 @@
         if (this.files && this.files[0]) {
           const file = this.files[0];
           const reader = new FileReader();
-          
           Swal.fire({ title: 'Memproses Gambar...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
           
           reader.onload = function(evt) {
@@ -917,35 +909,66 @@
   }
 
   function prosesCheckout() { 
-    if(cart.length === 0) { Swal.fire({ icon: 'warning', title: 'Keranjang Kosong' }); return; } 
-    const metode = document.getElementById('metodeBayar').value; 
-    const diskonInputVal = parseInt(document.getElementById('diskonNotaInput').value, 10) || 0;
-    let nominalPotongan = (diskonTipe === 'Rp') ? diskonInputVal : Math.round(totalBelanjaGlobal * (diskonInputVal / 100));
-    const totalAkhirSetelahDiskon = Math.max(0, totalBelanjaGlobal - nominalPotongan);
-    
-    if (metode === 'Cash' && !bypassModeActive) { 
-      const uangBayar = parseInt(document.getElementById('uangBayar').value, 10) || 0; 
-      if (uangBayar < totalAkhirSetelahDiskon) { Swal.fire({ icon: 'error', title: 'Uang Kurang' }); return; } 
-    } 
-    const btnPay = document.querySelector('.btn-pay'); if(btnPay) btnPay.disabled = true; 
-    const tgl = new Date().toLocaleString('id-ID'); 
-    const jamNow = new Date().toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
-    const transaksiBaru = [];
-    const wadahDipilih = document.getElementById('wadahTipeInput').value;
-    
-    cart.forEach(c => { 
-      let isMamaProduct = c.cat1.toLowerCase().includes('mama') || c.cat1.toLowerCase().includes('mamah');
-      transaksiBaru.push({ tgl: tgl, item: c.item, qty: c.qty, pembayaran: metode, isMama: isMamaProduct, diskonNilai: diskonInputVal, diskonTipe: diskonTipe, wadah: wadahDipilih }); 
-      simpanKeHistoryLokal('penjualan', { namaItem: c.item, qty: Number(c.qty) || 0, subtotal: (c.harga * c.qty), metode: metode, isMamaProduct: isMamaProduct, jam: jamNow, status: "OK", notaIdGroup: tgl });
+  if(cart.length === 0) { Swal.fire({ icon: 'warning', title: 'Keranjang Kosong' }); return; } 
+  const metode = document.getElementById('metodeBayar').value; 
+  const diskonInputVal = parseInt(document.getElementById('diskonNotaInput').value, 10) || 0;
+  let nominalPotongan = (diskonTipe === 'Rp') ? diskonInputVal : Math.round(totalBelanjaGlobal * (diskonInputVal / 100));
+  const totalAkhirSetelahDiskon = Math.max(0, totalBelanjaGlobal - nominalPotongan);
+  
+  if (metode === 'Cash' && !bypassModeActive) { 
+    const uangBayar = parseInt(document.getElementById('uangBayar').value, 10) || 0; 
+    if (uangBayar < totalAkhirSetelahDiskon) { Swal.fire({ icon: 'error', title: 'Uang Kurang' }); return; } 
+  } 
+  const btnPay = document.querySelector('.btn-pay'); if(btnPay) btnPay.disabled = true; 
+  
+  // FIX PERBAIKAN: Format tanggal ISO bersih tanpa koma agar tidak merusak parser JSON Google Sheets
+  const sekarang = new Date();
+  const tahun = sekarang.getFullYear();
+  const bulan = String(sekarang.getMonth() + 1).padStart(2, '0');
+  const tanggal = String(sekarang.getDate()).padStart(2, '0');
+  const jam = String(sekarang.getHours()).padStart(2, '0');
+  const menit = String(sekarang.getMinutes()).padStart(2, '0');
+  const detik = String(sekarang.getSeconds()).padStart(2, '0');
+  
+  const notaIdGroup = `${tanggal}/${bulan}/${tahun} ${jam}:${menit}:${detik}`; 
+  const jamNow = `${jam}:${menit}`;
+  
+  const transaksiBaru = [];
+  const wadahDipilih = document.getElementById('wadahTipeInput').value;
+  
+  cart.forEach(c => { 
+    let isMamaProduct = c.cat1 && c.cat1.toLowerCase().includes('mama') || c.cat1 && c.cat1.toLowerCase().includes('mamah');
+    transaksiBaru.push({ 
+      tgl: notaIdGroup, // Menggunakan format bersih dd/mm/yyyy hh:mm:ss
+      item: c.item, 
+      qty: Number(c.qty) || 1, 
+      pembayaran: metode, 
+      isMama: isMamaProduct, 
+      diskonNilai: diskonInputVal, 
+      diskonTipe: diskonTipe, 
+      wadah: wadahDipilih 
     }); 
     
-    const queue = JSON.parse(localStorage.getItem('sync_queue') || '[]'); 
-    localStorage.setItem('sync_queue', JSON.stringify([...queue, ...transaksiBaru])); 
-    Swal.fire({ icon: 'success', title: 'Sukses!', timer: 1000, showConfirmButton: false }); 
-    cart = []; document.getElementById('uangBayar').value = ''; document.getElementById('diskonNotaInput').value = '';
-    document.getElementById('bypassModeToggle').checked = false; bypassModeActive = false;
-    updateUI(); if(btnPay) btnPay.disabled = false; attemptSync(); 
-  }
+    simpanKeHistoryLokal('penjualan', { 
+      namaItem: c.item, 
+      qty: Number(c.qty) || 1, 
+      subtotal: (Number(c.harga) * Number(c.qty)), 
+      metode: metode, 
+      isMamaProduct: isMamaProduct, 
+      jam: jamNow, 
+      status: "OK", 
+      notaIdGroup: notaIdGroup 
+    });
+  }); 
+  
+  const queue = JSON.parse(localStorage.getItem('sync_queue') || '[]'); 
+  localStorage.setItem('sync_queue', JSON.stringify(queue.concat(transaksiBaru))); 
+  
+  Swal.fire({ icon: 'success', title: 'Sukses!', timer: 1000, showConfirmButton: false }); 
+  cart = []; document.getElementById('uangBayar').value = ''; document.getElementById('diskonNotaInput').value = '';
+  document.getElementById('bypassModeToggle').checked = false; bypassModeActive = false;
+  updateUI(); if(btnPay) btnPay.disabled = false; attemptSync(); 
+}
 
   function requestVoid() { 
     Swal.fire({ title: 'Otorisasi Admin', text: 'Masukkan PIN Owner untuk pembatalan:', input: 'password', showCancelButton: true }).then((result) => { 
@@ -1001,6 +1024,7 @@
     localStorage.setItem('rekap_hari_ini', JSON.stringify(history));
   }
 
+  backgroundSync = attemptSync;
   function rekapCheckWasteReminder() {
     if(!dataGlobalRekapKirim.tanggal) return Swal.fire('Gagal', 'Laporan kosong!', 'error');
     Swal.fire({ title: 'Perhatian!', text: 'Sudah catat Waste Dapur?', icon: 'warning', showCancelButton: true }).then((r) => {
@@ -1080,12 +1104,42 @@
     const qKasir = JSON.parse(localStorage.getItem('sync_queue') || '[]'); 
     const qOpr = JSON.parse(localStorage.getItem('sync_queue_opr') || '[]'); 
     const qBelanja = JSON.parse(localStorage.getItem('sync_queue_belanja') || '[]'); 
-    if(qKasir.length === 0 && qOpr.length === 0 && qBelanja.length === 0) { if(statusEl) statusEl.innerText = "Online"; return; } 
-    if(!navigator.onLine) { if(statusEl) statusEl.innerText = "Offline"; return; } 
-    isSyncing = true; if(statusEl) statusEl.innerText = "Syncing..."; 
+    
+    if(qKasir.length === 0 && qOpr.length === 0 && qBelanja.length === 0) { 
+      if(statusEl) statusEl.innerText = "Online"; 
+      return; 
+    } 
+    
+    if(!navigator.onLine) { 
+      if(statusEl) statusEl.innerText = "Offline"; 
+      return; 
+    } 
+    
+    isSyncing = true; 
+    if(statusEl) statusEl.innerText = "Syncing..."; 
     
     if (qKasir.length > 0) { 
-      fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'simpanData', payload: qKasir }) }).then(res=>res.json()).then(()=>{ localStorage.removeItem('sync_queue'); isSyncing = false; attemptSync(); refreshHistoryLogUI(); }).catch(()=>isSyncing=false);
+      const dataYangDikirim = [...qKasir]; 
+      
+      fetch(API_URL, { 
+        method: 'POST', 
+        body: JSON.stringify({ aksi: 'simpanData', payload: dataYangDikirim }) 
+      })
+      .then(res => res.json())
+      .then((res) => { 
+        isSyncing = false;
+        if(res.status === "Sukses" || res.hasil === "Sukses") {
+          let currentQueue = JSON.parse(localStorage.getItem('sync_queue') || '[]');
+          currentQueue.splice(0, dataYangDikirim.length);
+          localStorage.setItem('sync_queue', JSON.stringify(currentQueue));
+          attemptSync(); 
+          refreshHistoryLogUI(); 
+        }
+      })
+      .catch((err) => { 
+        console.log("Sync Error: ", err);
+        isSyncing = false; 
+      });
     } else if (qOpr.length > 0) { 
       fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'simpanDapur', payload: qOpr[0] }) }).then(res=>res.json()).then(()=>{ var q=JSON.parse(localStorage.getItem('sync_queue_opr')); q.shift(); localStorage.setItem('sync_queue_opr', JSON.stringify(q)); isSyncing = false; attemptSync(); }).catch(()=>isSyncing=false);
     } else if (qBelanja.length > 0) { 
@@ -1112,7 +1166,6 @@
   handleAktivitasDapurChange('Goreng Ayam');
   loadMenuDariSheets();
 
-  /* REGISTER SERVICE WORKER PWA */
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
       navigator.serviceWorker.register('sw.js').then(function(reg) {
