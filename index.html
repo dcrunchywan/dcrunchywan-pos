@@ -81,7 +81,7 @@
     .fav-star { position: absolute; top: 6px; right: 6px; font-size: 1.3rem; color: rgba(0,0,0,0.25); z-index: 100; text-shadow: 0 1px 2px white; }
     .fav-star.active { color: #f1c40f !important; }
     .menu-card .badge-cat { font-size: 0.65rem !important; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 8px; border-radius: 6px; }
-    .menu-card h6 { font-size: 1.05rem !important; font-weight: 800 !important; color: #2c3e50; text-transform: uppercase; margin: 5px 0 0 0; min-height: 44px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2; }
+    .menu-card h6 { font-size: 1.05rem !important; font-weight: 800 !important; color: #2c3e50; text-transform: uppercase; margin: 5px 0 0 0; min-height: 25px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2; }
     .menu-card .price-tag { font-size: 1rem !important; font-weight: 700; color: #e67e22; margin-top: auto; padding-top: 5px; }
     
     .cart-box { background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); padding: 15px; display: flex; flex-direction: column; }
@@ -790,7 +790,7 @@
         mediaHtml = `<img src="${x.imageUrl.toString().trim()}" alt="${x.item}" referrerpolicy="no-referrer" id="menuImgDOM-${globalIndex}" style="display:none;" onload="document.getElementById('menuImgDOM-${globalIndex}').style.display='block'; document.getElementById('fallbackFallback-${globalIndex}').style.display='none';" onerror="document.getElementById('menuImgDOM-${globalIndex}').style.display='none'; document.getElementById('fallbackFallback-${globalIndex}').style.display='flex';">
                      <div class="menu-icon-fallback" id="fallbackFallback-${globalIndex}"><i class="fas ${iconClass}"></i></div>`;
       }
-      grid.innerHTML += `<div class="col-6 col-sm-4 col-md-3"><div class="card menu-card h-100"><span class="fav-star" title="${judulAksi}" onclick="toggleFavorite('${x.item}', event)"><i class="fas ${iconAksiClass}"></i></span><div class="menu-img-container" onclick="addToCart(${globalIndex})">${mediaHtml}</div><div class="card-body p-2 text-center d-flex flex-column justify-content-between" onclick="addToCart(${globalIndex})"><div><span class="badge bg-light text-muted badge-cat mb-1 d-inline-block">${x.cat1 || 'Umum'}</span><h6>${x.item}</h6></div><p class="price-tag mb-0">Rp ${(Number(x.harga) || 0).toLocaleString('id-ID')}</p></div></div></div>`;
+      grid.innerHTML += `<div class="col-6 col-sm-4 col-md-3"><div class="card menu-card h-100"><span class="fav-star" title="${judulAksi}" onclick="toggleFavorite('${x.item}', event)"><i class="fas ${iconAksiClass}"></i></span><div class="menu-img-container" onclick="addToCart(${globalIndex})">${mediaHtml}</div><div class="card-body p-2 text-center d-flex flex-column justify-content-between" onclick="addToCart(${globalIndex})"><div><h6>${x.item}</h6></div><p class="price-tag mb-0">Rp ${(Number(x.harga) || 0).toLocaleString('id-ID')}</p></div></div></div>`;
     });
   }
 
