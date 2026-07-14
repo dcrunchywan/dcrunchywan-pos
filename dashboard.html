@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Owner · D'CrunchyWan</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+
+  <div class="dash-shell">
+
+    <header class="dash-topbar">
+      <div class="brand">
+        <span class="brand-mark">D'CrunchyWan</span>
+        <span class="brand-sub">Dashboard Owner</span>
+      </div>
+      <div class="mode-switch" role="tablist">
+        <button class="mode-btn active" id="modeHarianBtn" onclick="ubahMode('harian')" role="tab" aria-selected="true">Harian</button>
+        <button class="mode-btn" id="modeBulananBtn" onclick="ubahMode('bulanan')" role="tab" aria-selected="false">Bulanan</button>
+      </div>
+    </header>
+
+    <div class="dash-controls">
+      <div class="picker-group" id="pickerBulanWrap">
+        <label for="selectBulan">Bulan</label>
+        <select id="selectBulan"></select>
+      </div>
+      <div class="picker-group">
+        <label for="selectTahun">Tahun</label>
+        <select id="selectTahun"></select>
+      </div>
+      <button class="btn-refresh" id="btnRefresh" onclick="muatUlangData()" title="Muat ulang" aria-label="Muat ulang data">
+        <i class="fas fa-rotate"></i>
+      </button>
+    </div>
+
+    <section class="hero-register">
+      <div class="hero-perf-top" aria-hidden="true"></div>
+      <div class="hero-body">
+        <span class="hero-eyebrow" id="figPeriode">MEMUAT DATA&hellip;</span>
+        <div class="hero-figure" id="figGrandTotal">Rp 0</div>
+        <span class="hero-caption">Total Omzet Bersih</span>
+      </div>
+      <div class="hero-perf-bottom" aria-hidden="true"></div>
+    </section>
+
+    <section class="kpi-strip">
+      <div class="kpi-card">
+        <span class="kpi-label">Rata-rata / Hari</span>
+        <div class="kpi-value" id="kpiRataRata">Rp 0</div>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Ayam Terjual</span>
+        <div class="kpi-value" id="kpiAyam">0 pcs</div>
+        <span class="kpi-sub" id="kpiAyamRata">rata-rata 0 pcs/hari</span>
+      </div>
+      <div class="kpi-card kpi-positive">
+        <span class="kpi-label">Income Kotor</span>
+        <div class="kpi-value" id="kpiIncome">Rp 0</div>
+        <span class="kpi-sub">Omzet &minus; Pengeluaran</span>
+      </div>
+      <div class="kpi-card kpi-negative">
+        <span class="kpi-label">Pengeluaran</span>
+        <div class="kpi-value" id="kpiPengeluaran">Rp 0</div>
+      </div>
+    </section>
+
+    <section class="panel panel-chart">
+      <div class="panel-head">
+        <h2>Rincian <span id="grafikModeLabel">Per Hari</span></h2>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="grafikBatang" height="220"></canvas>
+      </div>
+    </section>
+
+    <section class="panel panel-nota">
+      <div class="panel-head">
+        <h2>Rasio Metode Pembayaran</h2>
+      </div>
+      <div class="nota-list" id="listMetode"></div>
+    </section>
+
+    <div class="dash-empty" id="emptyState" style="display:none;">
+      <i class="fas fa-receipt"></i>
+      <p>Belum ada transaksi tercatat di periode ini.</p>
+    </div>
+
+    <div class="dash-error" id="errorState" style="display:none;">
+      <i class="fas fa-plug-circle-exclamation"></i>
+      <p>Gagal memuat data. Periksa koneksi internet, lalu coba muat ulang.</p>
+    </div>
+
+    <footer class="dash-footer">
+      Sumber data: tab <strong>Transaksi</strong> &middot; tidak termasuk Transaksi Mamah
+    </footer>
+
+  </div>
+
+  <script src="js-core.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

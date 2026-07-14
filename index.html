@@ -45,7 +45,7 @@
     <button class="nav-link" id="rekap-tab-btn" data-bs-toggle="pill" data-bs-target="#panel-rekap" type="button" onclick="hitungRekapHarian(); closeMobileSidebar();"><i class="fas fa-calculator"></i>Rekap</button>
     
     <!-- DASHBOARD LINK (Hanya muncul jika lolos otorisasi PIN Owner) -->
-    <button class="nav-link text-warning border border-warning border-opacity-25" id="dashboard-tab-btn" data-bs-toggle="pill" data-bs-target="#panel-dashboard" type="button" onclick="renderOwnerDashboard(); closeMobileSidebar();" style="display: none !important;"><i class="fas fa-chart-line"></i>Dashboard</button>
+    <button class="nav-link text-warning border border-warning border-opacity-25" id="dashboard-tab-btn" type="button" onclick="bukaDashboardOwner(); closeMobileSidebar();" style="display: none !important;"><i class="fas fa-chart-line"></i>Dashboard</button>
     
     <div class="mt-auto pb-3 d-none d-lg-block">
       <button id="ownerModeBtn" onclick="toggleOwnerAuth()" class="btn btn-sm text-white opacity-40 p-0" style="font-size: 0.7rem;"><i class="fas fa-lock d-block mb-1"></i>Owner</button>
@@ -272,6 +272,12 @@
           </table>
         </div>
       </div>
+
+      <div class="card p-3 border-0 shadow-sm rounded-3 mx-auto border border-danger mt-3" id="ownerArsipSection" style="max-width: 700px; display:none !important;">
+        <h6 class="fw-bold mb-1 text-danger"><i class="fas fa-box-archive me-2"></i>Arsip Tahun Baru (Owner Mode)</h6>
+        <p class="extra-small text-muted mb-2">Rename tab <b>Transaksi</b> & <b>Transaksi Mamah</b> tahun ini jadi arsip (mis. <code>Transaksi_2026</code>), lalu buat tab baru kosong untuk tahun berikutnya. Dashboard tetap bisa baca rekap tahun lama. Lakukan sekali saja saat awal tahun setelah tutup buku.</p>
+        <button class="btn btn-sm btn-outline-danger fw-bold w-100" onclick="requestArsipTahun()"><i class="fas fa-box-archive me-1"></i>Arsipkan Transaksi Tahun Ini</button>
+      </div>
     </div>
 
     <!-- 5. PANEL PENGELUARAN KAS KECIL -->
@@ -323,73 +329,6 @@
         </div>
         <button onclick="rekapCheckWasteReminder()" class="btn btn-sm btn-danger w-100 fw-bold mb-1 py-2 shadow-sm"><i class="fas fa-cloud-upload-alt me-2"></i>KIRIM LAPORAN KE GSHEET</button>
         <button onclick="clearRekapHarian()" class="btn btn-sm btn-outline-secondary w-100 mt-1 extra-small">Reset Data Lokal Sesi Ini</button>
-      </div>
-    </div>
-
-    <!-- 8. PANEL DASHBOARD ANALISIS PENJUALAN OWNER -->
-    <div class="tab-pane fade" id="panel-dashboard">
-      <div class="container-fluid p-0">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h4 class="fw-bold text-dark m-0"><i class="fas fa-chart-line text-warning me-2"></i>Dasbor Analisis Omzet Owner</h4>
-          <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="renderOwnerDashboard()"><i class="fas fa-sync me-1"></i>Refresh Data</button>
-        </div>
-        
-        <div class="row g-3 mb-4">
-          <div class="col-6 col-md-3">
-            <div class="card dashboard-card bg-white p-3 border-start border-4 border-primary">
-              <small class="text-muted fw-bold d-block mb-1">TOTAL OMZET BERSIH</small>
-              <h4 class="fw-bold text-dark m-0" id="dashTotalOmzet">Rp 0</h4>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="card dashboard-card bg-white p-3 border-start border-4 border-success">
-              <small class="text-muted fw-bold d-block mb-1">PENDAPATAN TUNAI (CASH)</small>
-              <h5 class="fw-bold text-success m-0" id="dashTotalTunai">Rp 0</h5>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="card dashboard-card bg-white p-3 border-start border-4 border-info">
-              <small class="text-muted fw-bold d-block mb-1">OMZET NON-TUNAI/QRIS</small>
-              <h5 class="fw-bold text-info m-0" id="dashTotalNonTunai">Rp 0</h5>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="card dashboard-card bg-white p-3 border-start border-4 border-danger">
-              <small class="text-muted fw-bold d-block mb-1">TOTAL ITEM TERJUAL</small>
-              <h5 class="fw-bold text-danger m-0" id="dashTotalQty">0 Pcs</h5>
-            </div>
-          </div>
-        </div>
-
-        <div class="row g-3">
-          <div class="col-md-7">
-            <div class="card dashboard-card p-3 bg-white h-100">
-              <h6 class="fw-bold text-dark mb-3"><i class="fas fa-crown text-warning me-2"></i>Peringkat Menu Paling Laris</h6>
-              <div class="table-responsive">
-                <table class="table table-sm table-hover align-middle small m-0">
-                  <thead class="table-light">
-                    <tr>
-                      <th>Nama Menu</th>
-                      <th class="text-center">Kuantitas</th>
-                      <th class="text-end">Subtotal Pendapatan</th>
-                    </tr>
-                  </thead>
-                  <tbody id="dashTabelTerlaris">
-                    <tr><td colspan="3" class="text-center text-muted py-3">Belum ada transaksi terekam.</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-5">
-            <div class="card dashboard-card p-3 bg-white h-100">
-              <h6 class="fw-bold text-dark mb-3"><i class="fas fa-wallet text-secondary me-2"></i>Rasio Channel Pembayaran</h6>
-              <div id="dashListMetode" class="d-flex flex-column gap-2 mt-2">
-                <div class="text-center text-muted py-3">Tidak ada data rasio.</div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
 

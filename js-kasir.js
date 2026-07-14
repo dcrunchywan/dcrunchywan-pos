@@ -11,9 +11,6 @@
       document.getElementById('ownerModeBtn')?.classList.add('opacity-40');
       if(document.getElementById('ownerMobileBtn')) document.getElementById('ownerMobileBtn').className = "btn btn-sm btn-outline-light py-1 px-2 fw-bold";
       document.getElementById('dashboard-tab-btn').style.setProperty('display', 'none', 'important');
-      if(document.getElementById('dashboard-tab-btn').classList.contains('active')) {
-        document.getElementById('kasir-tab-btn').click();
-      }
       Swal.fire('Owner Logout', 'Kembali ke mode kasir standar.', 'info');
       applyOwnerUIVisibility();
     } else {
@@ -92,11 +89,16 @@
   function applyOwnerUIVisibility() {
     const headerStok = document.getElementById('ownerStokHeader');
     const ownerSection = document.getElementById('ownerApprovalSection');
+    const arsipSection = document.getElementById('ownerArsipSection');
     if (headerStok) { headerStok.style.setProperty('display', isOwnerAuthenticated ? 'table-cell' : 'none', 'important'); }
     if (isOwnerAuthenticated) {
       if(ownerSection) ownerSection.style.setProperty('display', 'block', 'important');
+      if(arsipSection) arsipSection.style.setProperty('display', 'block', 'important');
       loadDraftOpnameServerSide();
-    } else { if(ownerSection) ownerSection.style.setProperty('display', 'none', 'important'); }
+    } else {
+      if(ownerSection) ownerSection.style.setProperty('display', 'none', 'important');
+      if(arsipSection) arsipSection.style.setProperty('display', 'none', 'important');
+    }
     filterTabelOpname();
     renderMenu();
   }
@@ -318,58 +320,13 @@
     }
   }
 
-  function renderOwnerDashboard() {
-    let history = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
-    let totalOmzet = 0; let totalTunai = 0; let totalNonTunai = 0; let totalQty = 0;
-    let produkMap = {}; let metodeMap = {};
-
-    history.forEach((x) => {
-      if (x.tipe === 'penjualan' && x.status !== 'VOID') {
-        let subtotalVal = parseInt(x.subtotal, 10) || 0;
-        let qtyVal = parseInt(x.qty, 10) || 0;
-        totalOmzet += subtotalVal;
-        totalQty += qtyVal;
-        if (x.metode === 'Cash') totalTunai += subtotalVal; else totalNonTunai += subtotalVal;
-
-        if (!produkMap[x.namaItem]) produkMap[x.namaItem] = { qty: 0, omzet: 0 };
-        produkMap[x.namaItem].qty += qtyVal;
-        produkMap[x.namaItem].omzet += subtotalVal;
-
-        let mName = x.metode || 'Cash';
-        metodeMap[mName] = (metodeMap[mName] || 0) + subtotalVal;
-      }
-    });
-
-    document.getElementById('dashTotalOmzet').innerText = 'Rp ' + totalOmzet.toLocaleString('id-ID');
-    document.getElementById('dashTotalTunai').innerText = 'Rp ' + totalTunai.toLocaleString('id-ID');
-    document.getElementById('dashTotalNonTunai').innerText = 'Rp ' + totalNonTunai.toLocaleString('id-ID');
-    document.getElementById('dashTotalQty').innerText = totalQty + ' Pcs';
-
-    const tbody = document.getElementById('dashTabelTerlaris');
-    let sortedProduk = Object.keys(produkMap).map(key => ({ name: key, ...produkMap[key] }));
-    sortedProduk.sort((a, b) => b.qty - a.qty);
-
-    if (sortedProduk.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">Belum ada transaksi terekam.</td></tr>';
-    } else {
-      tbody.innerHTML = '';
-      sortedProduk.forEach((p) => {
-        tbody.innerHTML += `<tr><td class="fw-bold text-dark text-uppercase">${p.name}</td><td class="text-center bg-light fw-bold text-primary">${p.qty}x</td><td class="text-end fw-bold text-success">Rp ${p.omzet.toLocaleString('id-ID')}</td></tr>`;
-      });
-    }
-
-    const methodContainer = document.getElementById('dashListMetode');
-    let channels = Object.keys(metodeMap).map(k => ({ label: k, value: metodeMap[k] }));
-    if (channels.length === 0) {
-      methodContainer.innerHTML = '<div class="text-center text-muted py-3">Tidak ada data rasio.</div>';
-    } else {
-      methodContainer.innerHTML = '';
-      channels.forEach((c) => {
-        let pct = totalOmzet > 0 ? Math.round((c.value / totalOmzet) * 100) : 0;
-        let barColor = c.label === 'Cash' ? 'bg-success' : (c.label === 'Qris' ? 'bg-info' : 'bg-warning');
-        methodContainer.innerHTML += `<div class="mb-2"><div class="d-flex justify-content-between extra-small fw-bold mb-1"><span class="text-uppercase">${c.label}</span><span class="text-muted">Rp ${c.value.toLocaleString('id-ID')} (${pct}%)</span></div><div class="progress" style="height: 10px;"><div class="progress-bar ${barColor}" role="progressbar" style="width: ${pct}%"></div></div></div>`;
-      });
-    }
+  // Dashboard Owner sekarang halaman TERPISAH, diserve langsung oleh Apps
+  // Script (doGet?page=dashboard) -- BUKAN tab lokal di index.html. Dibuka
+  // di jendela/tab baru supaya tablet kasir tidak pernah ikut memuat
+  // markup/JS dashboard sama sekali.
+  function bukaDashboardOwner() {
+    if (!isOwnerAuthenticated) return;
+    window.open(API_URL + '?page=dashboard', '_blank');
   }
 
   function addToCart(idx) {
@@ -455,6 +412,30 @@
   document.getElementById('bypassModeToggle').checked = false; bypassModeActive = false;
   updateUI(); if(btnPay) btnPay.disabled = false; attemptSync(); 
 }
+
+  function requestArsipTahun() {
+    Swal.fire({
+      title: 'Arsipkan Transaksi Tahun Ini?',
+      html: 'Tab <b>Transaksi</b> & <b>Transaksi Mamah</b> akan di-<i>rename</i> jadi arsip, lalu tab baru kosong dibuat untuk tahun berjalan. Proses ini <b>tidak bisa dibatalkan</b>. Masukkan PIN Owner untuk lanjut:',
+      input: 'password',
+      inputPlaceholder: 'PIN Owner',
+      showCancelButton: true,
+      confirmButtonText: 'Ya, Arsipkan',
+      confirmButtonColor: '#e74c3c'
+    }).then((result) => {
+      if (!result.isConfirmed) return;
+      Swal.fire({ title: 'Memproses Arsip...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+      fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'arsipTahun', pin: result.value }) })
+        .then(res => res.json())
+        .then((respon) => {
+          Swal.close();
+          const hasil = (respon && respon.hasil) ? respon.hasil.toString() : 'Gagal terhubung ke server.';
+          const gagal = hasil.indexOf('Error') === 0 || hasil.indexOf('Gagal') === 0;
+          Swal.fire({ title: gagal ? 'Gagal' : 'Selesai', html: hasil, icon: gagal ? 'error' : 'success' });
+        })
+        .catch(() => { Swal.close(); Swal.fire('Gagal', 'Tidak bisa terhubung ke server. Cek koneksi internet.', 'error'); });
+    });
+  }
 
   function requestVoid() { 
     Swal.fire({ title: 'Otorisasi Admin', text: 'Masukkan PIN Owner untuk pembatalan:', input: 'password', showCancelButton: true }).then((result) => { 
