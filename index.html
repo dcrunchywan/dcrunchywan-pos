@@ -1128,12 +1128,20 @@
       .then(res => res.json())
       .then((res) => { 
         isSyncing = false;
-        if(res.status === "Sukses" || res.hasil === "Sukses") {
+        // PENTING: backend sekarang mengirim status "Sukses" HANYA jika
+        // benar-benar berhasil menulis (lihat perbaikan pada doPost/simpanData
+        // di code.gs). Jangan pernah menghapus antrian lokal kalau statusnya
+        // bukan "Sukses" -- biarkan tetap di queue supaya dicoba lagi nanti,
+        // daripada datanya hilang diam-diam.
+        if (res.status === "Sukses") {
           let currentQueue = JSON.parse(localStorage.getItem('sync_queue') || '[]');
           currentQueue.splice(0, dataYangDikirim.length);
           localStorage.setItem('sync_queue', JSON.stringify(currentQueue));
           attemptSync(); 
           refreshHistoryLogUI(); 
+        } else {
+          console.log("Sync ditolak server, item tetap di antrian untuk dicoba lagi:", res);
+          if (statusEl) statusEl.innerText = "Gagal Sync, akan dicoba lagi";
         }
       })
       .catch((err) => { 
