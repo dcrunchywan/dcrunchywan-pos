@@ -1,7 +1,10 @@
-const CACHE_NAME = 'dcrunchywan-pos-cache-v2';
+const CACHE_NAME = 'dcrunchywan-pos-cache-v3';
 const urlsToCache = [
   './',
   './index.html',
+  './styles.css',
+  './js-core.js',
+  './js-kasir.js',
   'https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css',
   'https://cdn.jsdelivr.net/npm/sweetalert2@11'
