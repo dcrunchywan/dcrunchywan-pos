@@ -678,18 +678,20 @@ const clientTxnId = crypto.randomUUID
           currentQueue.splice(0, dataYangDikirim.length);
           localStorage.setItem('sync_queue', JSON.stringify(currentQueue));
 
-          // Simpan notaIdServer (identifier yang BENAR-BENAR ditulis server
-          // ke kolom A sheet Transaksi -- lihat catatan di simpanData/code.gs)
-          // ke histori lokal, supaya void nanti bisa menargetkan baris yang
-          // tepat. notaIdGroup buatan klien TIDAK BISA dipakai langsung
-          // karena tidak pernah sama dengan nilai yang ditulis server.
-          const notaIdServer = res.hasil && res.hasil.notaIdServer;
-          if (notaIdServer) {
-            const clientTxnIdsTersinkron = [...new Set(dataYangDikirim.map(it => it.clientTxnId))];
+          // Simpan notaIdServer PER NOTA (map clientTxnId -> identifier yang
+          // BENAR-BENAR ditulis server ke kolom A sheet Transaksi -- lihat
+          // catatan di simpanData/code.gs) ke histori lokal, supaya void
+          // nanti bisa menargetkan baris yang tepat. notaIdGroup buatan
+          // klien TIDAK BISA dipakai langsung karena tidak pernah sama
+          // dengan nilai yang ditulis server. Dipetakan per clientTxnId
+          // (bukan satu nilai untuk seluruh batch) karena satu batch bisa
+          // berisi beberapa nota berbeda sekaligus.
+          const notaIdServerMap = (res.hasil && res.hasil.notaIdServerMap) || {};
+          if (Object.keys(notaIdServerMap).length > 0) {
             let historyUpdate = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
             historyUpdate.forEach(h => {
-              if (h.tipe === 'penjualan' && clientTxnIdsTersinkron.includes(h.clientTxnId)) {
-                h.notaIdServer = notaIdServer;
+              if (h.tipe === 'penjualan' && h.clientTxnId && notaIdServerMap[h.clientTxnId]) {
+                h.notaIdServer = notaIdServerMap[h.clientTxnId];
               }
             });
             localStorage.setItem('rekap_hari_ini', JSON.stringify(historyUpdate));
