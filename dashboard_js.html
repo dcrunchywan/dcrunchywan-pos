@@ -182,6 +182,10 @@ function renderDashboard(res) {
 }
 
 function renderChart(chartData) {
+  if (typeof Chart === 'undefined') {
+    console.error('Chart.js belum siap (window.Chart undefined) -- grafik dilewati, cek apakah script CDN Chart.js gagal dimuat.');
+    return;
+  }
   const ctx = document.getElementById('grafikBatang').getContext('2d');
   const style = getComputedStyle(document.documentElement);
   const emberColor = style.getPropertyValue('--ember').trim() || '#e67e22';
