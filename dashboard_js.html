@@ -1,0 +1,263 @@
+// ============================================================
+// D'CrunchyWan — Dashboard Owner (dashboard.js)
+// Halaman ini diserve LANGSUNG oleh Apps Script (doGet?page=dashboard),
+// BUKAN dari GitHub Pages. Karena itu kita pakai google.script.run
+// (bukan fetch ke API_URL) -- lebih simpel, tanpa CORS, dan tidak
+// bergantung sama sekali pada file di tablet kasir.
+// ============================================================
+
+let modeAktif = 'harian';
+let sedangMuat = false;
+
+function formatRupiahDash(angka) {
+  return 'Rp ' + Math.round(Number(angka) || 0).toLocaleString('id-ID');
+}
+
+function inisialisasiPicker() {
+  const selectBulan = document.getElementById('selectBulan');
+  const selectTahun = document.getElementById('selectTahun');
+  const namaBulan = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+
+  const sekarang = new Date();
+  const bulanIni = sekarang.getMonth() + 1;
+  const tahunIni = sekarang.getFullYear();
+
+  selectBulan.innerHTML = '';
+  namaBulan.forEach((nama, idx) => {
+    const opt = document.createElement('option');
+    opt.value = idx + 1;
+    opt.textContent = nama;
+    if (idx + 1 === bulanIni) opt.selected = true;
+    selectBulan.appendChild(opt);
+  });
+
+  selectTahun.innerHTML = '';
+  // Tahun berjalan + 4 tahun ke belakang (mengikuti tab arsip Transaksi_<tahun>)
+  for (let t = tahunIni; t >= tahunIni - 4; t--) {
+    const opt = document.createElement('option');
+    opt.value = t;
+    opt.textContent = t;
+    if (t === tahunIni) opt.selected = true;
+    selectTahun.appendChild(opt);
+  }
+
+  selectBulan.addEventListener('change', muatUlangData);
+  selectTahun.addEventListener('change', muatUlangData);
+
+  // Tanggal untuk tab QRIS -- default hari ini.
+  const selectTanggal = document.getElementById('selectTanggal');
+  const dd = String(sekarang.getDate()).padStart(2, '0');
+  const mmIso = String(bulanIni).padStart(2, '0');
+  selectTanggal.value = tahunIni + '-' + mmIso + '-' + dd;
+  selectTanggal.addEventListener('change', muatUlangData);
+}
+
+function ubahMode(mode) {
+  if (mode === modeAktif) return;
+  modeAktif = mode;
+  document.getElementById('modeHarianBtn').classList.toggle('active', mode === 'harian');
+  document.getElementById('modeHarianBtn').setAttribute('aria-selected', mode === 'harian');
+  document.getElementById('modeBulananBtn').classList.toggle('active', mode === 'bulanan');
+  document.getElementById('modeBulananBtn').setAttribute('aria-selected', mode === 'bulanan');
+  document.getElementById('modeQrisBtn').classList.toggle('active', mode === 'qris');
+  document.getElementById('modeQrisBtn').setAttribute('aria-selected', mode === 'qris');
+
+  document.getElementById('pickerBulanWrap').style.display = (mode === 'harian') ? 'flex' : 'none';
+  document.getElementById('pickerTahunWrap').style.display = (mode === 'qris') ? 'none' : 'flex';
+  document.getElementById('pickerTanggalWrap').style.display = (mode === 'qris') ? 'flex' : 'none';
+
+  const ringkasanTampil = (mode !== 'qris') ? '' : 'none';
+  document.querySelector('.hero-register').style.display = ringkasanTampil;
+  document.querySelector('.kpi-strip').style.display = ringkasanTampil;
+  document.querySelector('.panel-chart').style.display = ringkasanTampil;
+  document.querySelector('.panel-nota').style.display = ringkasanTampil;
+  document.getElementById('panelQris').style.display = (mode === 'qris') ? 'block' : 'none';
+
+  document.getElementById('dashFooter').innerHTML = (mode === 'qris')
+    ? 'Sumber data: tab <strong>Transaksi</strong> &amp; <strong>Transaksi Mamah</strong> (gabungan, khusus QRIS)'
+    : 'Sumber data: tab <strong>Transaksi</strong> &middot; tidak termasuk Transaksi Mamah';
+
+  if (mode !== 'qris') {
+    document.getElementById('grafikModeLabel').textContent = (mode === 'harian') ? 'Per Hari' : 'Per Bulan';
+  }
+  muatUlangData();
+}
+
+function muatUlangData() {
+  if (sedangMuat) return;
+  sedangMuat = true;
+
+  const btn = document.getElementById('btnRefresh');
+  btn.classList.add('is-loading');
+  sembunyikanState();
+
+  const onGagal = (err) => {
+    sedangMuat = false;
+    btn.classList.remove('is-loading');
+    tampilkanError();
+    console.error(err);
+  };
+
+  if (modeAktif === 'qris') {
+    const tglInput = document.getElementById('selectTanggal').value; // format "yyyy-MM-dd"
+    if (!tglInput) { sedangMuat = false; btn.classList.remove('is-loading'); return; }
+    const bagian = tglInput.split('-'); // [yyyy, MM, dd]
+    const onSuksesQris = (res) => {
+      sedangMuat = false;
+      btn.classList.remove('is-loading');
+      if (!res || res.status !== 'ok') { tampilkanError(); return; }
+      renderQrisList(res);
+    };
+    google.script.run.withSuccessHandler(onSuksesQris).withFailureHandler(onGagal)
+      .ambilDaftarTransaksiQris(parseInt(bagian[2], 10), parseInt(bagian[1], 10), parseInt(bagian[0], 10));
+    return;
+  }
+
+  const bulan = document.getElementById('selectBulan').value;
+  const tahun = document.getElementById('selectTahun').value;
+
+  const onSukses = (res) => {
+    sedangMuat = false;
+    btn.classList.remove('is-loading');
+    if (!res || res.status !== 'ok') {
+      tampilkanError();
+      return;
+    }
+    renderDashboard(res);
+  };
+
+  if (modeAktif === 'harian') {
+    google.script.run.withSuccessHandler(onSukses).withFailureHandler(onGagal).ambilRekapHarian(bulan, tahun);
+  } else {
+    google.script.run.withSuccessHandler(onSukses).withFailureHandler(onGagal).ambilRekapBulanan(tahun);
+  }
+}
+
+function sembunyikanState() {
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('errorState').style.display = 'none';
+}
+
+function tampilkanError() {
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('errorState').style.display = 'block';
+}
+
+let chartInstance = null;
+
+function renderDashboard(res) {
+  document.getElementById('figPeriode').textContent = res.periodeLabel.toUpperCase();
+  document.getElementById('figGrandTotal').textContent = formatRupiahDash(res.grandTotal);
+  document.getElementById('kpiRataRata').textContent = formatRupiahDash(res.rataRataPerHari);
+  document.getElementById('kpiAyam').textContent = (res.ayamTerjual || 0).toLocaleString('id-ID') + ' pcs';
+  document.getElementById('kpiAyamRata').textContent = 'rata-rata ' + (res.ayamRataRataPerHari || 0).toLocaleString('id-ID') + ' pcs/hari';
+  document.getElementById('kpiIncome').textContent = formatRupiahDash(res.incomeKotor);
+  document.getElementById('kpiPengeluaran').textContent = formatRupiahDash(res.totalPengeluaran);
+
+  renderChart(res.chart);
+  renderMetode(res.metode, res.grandTotal);
+
+  if (!res.adaData) {
+    document.getElementById('emptyState').style.display = 'block';
+  }
+}
+
+function renderChart(chartData) {
+  const ctx = document.getElementById('grafikBatang').getContext('2d');
+  const style = getComputedStyle(document.documentElement);
+  const emberColor = style.getPropertyValue('--ember').trim() || '#e67e22';
+  const textDim = style.getPropertyValue('--text-dim').trim() || '#a89a8c';
+
+  if (chartInstance) {
+    chartInstance.data.labels = chartData.labels;
+    chartInstance.data.datasets[0].data = chartData.values;
+    chartInstance.update();
+    return;
+  }
+
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: chartData.labels,
+      datasets: [{
+        label: 'Omzet',
+        data: chartData.values,
+        backgroundColor: emberColor,
+        borderRadius: 4,
+        maxBarThickness: 28
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: (c) => formatRupiahDash(c.parsed.y) }
+      }},
+      scales: {
+        x: { ticks: { color: textDim, font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: textDim, font: { size: 10 },
+              callback: (v) => 'Rp ' + (v / 1000) + 'rb' }, grid: { color: 'rgba(255,255,255,0.06)' } }
+      }
+    }
+  });
+}
+
+function renderMetode(metodeArr, grandTotal) {
+  const wrap = document.getElementById('listMetode');
+  wrap.innerHTML = '';
+
+  if (!metodeArr || metodeArr.length === 0) {
+    wrap.innerHTML = '<div class="nota-row is-empty"><span class="nota-label">Belum ada data</span></div>';
+    return;
+  }
+
+  const nilaiMax = Math.max.apply(null, metodeArr.map(m => m.nilai));
+
+  metodeArr.forEach((m) => {
+    const pct = grandTotal > 0 ? Math.round((m.nilai / grandTotal) * 100) : 0;
+    const lebarBar = nilaiMax > 0 ? Math.round((m.nilai / nilaiMax) * 100) : 0;
+
+    const row = document.createElement('div');
+    row.className = 'nota-row-wrap';
+    row.innerHTML = `
+      <div class="nota-row">
+        <span class="nota-label">${m.label}</span>
+        <span class="nota-leader"></span>
+        <span class="nota-value">${formatRupiahDash(m.nilai)} <span class="nota-count">${m.jumlah}x &middot; ${pct}%</span></span>
+      </div>
+      <div class="nota-bar-track"><div class="nota-bar-fill" style="width:${lebarBar}%"></div></div>
+    `;
+    wrap.appendChild(row);
+  });
+}
+
+function renderQrisList(res) {
+  document.getElementById('qrisTotalLabel').textContent =
+    formatRupiahDash(res.totalQris) + ' · ' + (res.jumlahNota || 0) + ' struk';
+
+  const wrap = document.getElementById('listQris');
+  wrap.innerHTML = '';
+
+  if (!res.daftar || res.daftar.length === 0) {
+    document.getElementById('emptyState').style.display = 'block';
+    return;
+  }
+
+  res.daftar.forEach((n) => {
+    const isVoid = n.status === 'VOID';
+    const row = document.createElement('div');
+    row.className = 'qris-row' + (isVoid ? ' is-void' : '');
+    row.innerHTML = `
+      <span class="qris-jam">${n.jam}</span>
+      <span class="qris-sumber">${n.sumber}</span>
+      <span class="qris-leader"></span>
+      <span class="qris-nilai">${formatRupiahDash(n.total)}</span>
+      ${isVoid ? '<span class="qris-badge-void">VOID</span>' : ''}
+    `;
+    wrap.appendChild(row);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  inisialisasiPicker();
+  muatUlangData();
+});

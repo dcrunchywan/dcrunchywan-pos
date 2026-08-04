@@ -9,7 +9,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="dashboard.css">
+  <style>
+    <?!= include('dashboard_css'); ?>
+  </style>
 </head>
 <body>
 
@@ -23,6 +25,7 @@
       <div class="mode-switch" role="tablist">
         <button class="mode-btn active" id="modeHarianBtn" onclick="ubahMode('harian')" role="tab" aria-selected="true">Harian</button>
         <button class="mode-btn" id="modeBulananBtn" onclick="ubahMode('bulanan')" role="tab" aria-selected="false">Bulanan</button>
+        <button class="mode-btn" id="modeQrisBtn" onclick="ubahMode('qris')" role="tab" aria-selected="false">QRIS</button>
       </div>
     </header>
 
@@ -31,9 +34,13 @@
         <label for="selectBulan">Bulan</label>
         <select id="selectBulan"></select>
       </div>
-      <div class="picker-group">
+      <div class="picker-group" id="pickerTahunWrap">
         <label for="selectTahun">Tahun</label>
         <select id="selectTahun"></select>
+      </div>
+      <div class="picker-group" id="pickerTanggalWrap" style="display:none;">
+        <label for="selectTanggal">Tanggal</label>
+        <input type="date" id="selectTanggal">
       </div>
       <button class="btn-refresh" id="btnRefresh" onclick="muatUlangData()" title="Muat ulang" aria-label="Muat ulang data">
         <i class="fas fa-rotate"></i>
@@ -87,6 +94,14 @@
       <div class="nota-list" id="listMetode"></div>
     </section>
 
+    <section class="panel panel-qris" id="panelQris" style="display:none;">
+      <div class="panel-head panel-head-qris">
+        <h2>Daftar Transaksi <span>QRIS</span></h2>
+        <div class="qris-total" id="qrisTotalLabel">Rp 0</div>
+      </div>
+      <div class="qris-list" id="listQris"></div>
+    </section>
+
     <div class="dash-empty" id="emptyState" style="display:none;">
       <i class="fas fa-receipt"></i>
       <p>Belum ada transaksi tercatat di periode ini.</p>
@@ -97,13 +112,14 @@
       <p>Gagal memuat data. Periksa koneksi internet, lalu coba muat ulang.</p>
     </div>
 
-    <footer class="dash-footer">
+    <footer class="dash-footer" id="dashFooter">
       Sumber data: tab <strong>Transaksi</strong> &middot; tidak termasuk Transaksi Mamah
     </footer>
 
   </div>
 
-  <script src="js-core.js"></script>
-  <script src="dashboard.js"></script>
+  <script>
+    <?!= include('dashboard_js'); ?>
+  </script>
 </body>
 </html>
