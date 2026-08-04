@@ -132,7 +132,7 @@
         .then((res) => {
           Swal.close();
           if(res.hasil === "Sukses") { Swal.fire('Berhasil', 'Stok utama sheet telah disesuaikan!', 'success'); loadDraftOpnameServerSide(); loadStokBarang(); }
-          else { Swal.fire('Error', res.error, 'error'); }
+          else { Swal.fire('Error', res.hasil || 'Gagal menghubungi server.', 'error'); }
         });
       }
     });
@@ -376,12 +376,20 @@
   const notaIdGroup = `${tanggal}/${bulan}/${tahun} ${jam}:${menit}:${detik}`; 
   const jamNow = `${jam}:${menit}`;
   
+  // ID unik untuk SATU NOTA.
+// Semua item dalam checkout ini memakai ID yang sama.
+const clientTxnId = crypto.randomUUID
+  ? crypto.randomUUID()
+  : (Date.now() + "-" + Math.random().toString(36).substr(2,8));
+
+
   const transaksiBaru = [];
   const wadahDipilih = document.getElementById('wadahTipeInput').value;
   
   cart.forEach(c => { 
     let isMamaProduct = c.cat1 && c.cat1.toLowerCase().includes('mama') || c.cat1 && c.cat1.toLowerCase().includes('mamah');
     transaksiBaru.push({ 
+      clientTxnId: clientTxnId,
       tgl: notaIdGroup, // Menggunakan format bersih dd/mm/yyyy hh:mm:ss
       item: c.item, 
       qty: Number(c.qty) || 1, 
@@ -437,30 +445,57 @@
     });
   }
 
-  function requestVoid() { 
-    Swal.fire({ title: 'Otorisasi Admin', text: 'Masukkan PIN Owner untuk pembatalan:', input: 'password', showCancelButton: true }).then((result) => { 
-      if (result.isConfirmed) { 
-        Swal.fire({ title: 'Memproses Void...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
-        fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'void', pin: result.value }) })
-        .then(res => res.json())
-        .then((respon) => { 
-          Swal.close(); 
-          Swal.fire(respon.hasil.includes("Sukses") ? 'success' : 'error', respon.hasil); 
-          let history = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
-          if(history.length > 0) {
-            let targetNotaGroupText = "";
-            for(let k = history.length - 1; k >= 0; k--) {
-              if(history[k].tipe === 'penjualan' && history[k].status === 'OK') { targetNotaGroupText = history[k].notaIdGroup || ""; break; }
-            }
-            if(targetNotaGroupText !== "") {
-              for(let m = 0; m < history.length; m++) { if(history[m].notaIdGroup === targetNotaGroupText) { history[m].status = 'VOID'; } }
-            }
-            localStorage.setItem('rekap_hari_ini', JSON.stringify(history));
-          }
-          refreshHistoryLogUI(); loadStokAyam();
-        }); 
-      } 
-    }); 
+  // Cari notaIdGroup dari penjualan lokal terakhir yang statusnya masih OK.
+  // Ini jadi target eksplisit untuk void -- BUKAN "baris terakhir di server",
+  // supaya void tidak pernah salah sasaran saat ada transaksi lain yang masih
+  // antre sync (offline) di antara transaksi yang mau dibatalkan dan sekarang.
+  function getLastLocalNotaOkId() {
+    const history = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
+    for (let k = history.length - 1; k >= 0; k--) {
+      if (history[k].tipe === 'penjualan' && history[k].status === 'OK') return history[k].notaIdGroup || "";
+    }
+    return "";
+  }
+
+  function tandaiNotaVoidLokal(notaId) {
+    let history = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
+    history.forEach(h => { if (h.notaIdGroup === notaId) h.status = 'VOID'; });
+    localStorage.setItem('rekap_hari_ini', JSON.stringify(history));
+  }
+
+  function requestVoid() {
+    const targetNotaId = getLastLocalNotaOkId();
+    if (!targetNotaId) { Swal.fire('Tidak Ada Transaksi', 'Belum ada transaksi di riwayat sesi ini yang bisa di-void.', 'info'); return; }
+
+    const queueVoidCek = JSON.parse(localStorage.getItem('sync_queue_void') || '[]');
+    if (queueVoidCek.some(v => v.targetNotaId === targetNotaId)) {
+      Swal.fire('Menunggu Sinkronisasi', 'Struk ini sudah diantrekan untuk di-void, menunggu koneksi internet.', 'info');
+      return;
+    }
+
+    Swal.fire({ title: 'Otorisasi Admin', text: 'Masukkan PIN Owner untuk pembatalan:', input: 'password', showCancelButton: true }).then((result) => {
+      if (!result.isConfirmed) return;
+      // PIN dicek di sisi klien dulu (sama seperti mode Owner) supaya kasir
+      // tetap dapat kepastian instan walau offline. Server tetap validasi
+      // ulang PIN saat request ini akhirnya tersambung (lihat batalkanTransaksiTerakhir).
+      if (result.value !== "1234") { Swal.fire('Gagal', 'PIN Salah!', 'error'); return; }
+
+      // Tandai lokal SEKARANG (optimistic) supaya Riwayat & Rekap langsung
+      // konsisten dengan niat kasir, tidak menunggu jawaban server.
+      tandaiNotaVoidLokal(targetNotaId);
+      refreshHistoryLogUI();
+
+      const queueVoid = JSON.parse(localStorage.getItem('sync_queue_void') || '[]');
+      queueVoid.push({ targetNotaId: targetNotaId, pin: result.value });
+      localStorage.setItem('sync_queue_void', JSON.stringify(queueVoid));
+
+      if (navigator.onLine) {
+        Swal.fire({ icon: 'success', title: 'Void Diproses', text: 'Struk ditandai batal & sedang dikirim ke server.', timer: 1800, showConfirmButton: false });
+      } else {
+        Swal.fire({ icon: 'info', title: 'Tersimpan (Offline)', text: 'Struk ditandai batal secara lokal. Akan otomatis dikirim ke server saat koneksi kembali.', timer: 2500, showConfirmButton: false });
+      }
+      attemptSync();
+    });
   }
 
   function loadStokBarang() { 
@@ -568,11 +603,12 @@
   function attemptSync() { 
     if (isSyncing) return; 
     const statusEl = document.getElementById('syncStatus'); 
-    const qKasir = JSON.parse(localStorage.getItem('sync_queue') || '[]'); 
-    const qOpr = JSON.parse(localStorage.getItem('sync_queue_opr') || '[]'); 
-    const qBelanja = JSON.parse(localStorage.getItem('sync_queue_belanja') || '[]'); 
-    
-    if(qKasir.length === 0 && qOpr.length === 0 && qBelanja.length === 0) { 
+    const qKasir = JSON.parse(localStorage.getItem('sync_queue') || '[]');
+    const qVoid = JSON.parse(localStorage.getItem('sync_queue_void') || '[]');
+    const qOpr = JSON.parse(localStorage.getItem('sync_queue_opr') || '[]');
+    const qBelanja = JSON.parse(localStorage.getItem('sync_queue_belanja') || '[]');
+
+    if(qKasir.length === 0 && qVoid.length === 0 && qOpr.length === 0 && qBelanja.length === 0) {
       if(statusEl) statusEl.innerText = "Online"; 
       return; 
     } 
@@ -615,7 +651,25 @@
         console.log("Sync Error: ", err);
         isSyncing = false; 
       });
-    } else if (qOpr.length > 0) { 
+    } else if (qVoid.length > 0) {
+      // Sengaja dicek SETELAH qKasir kosong: kalau nota yang mau di-void masih
+      // antre di sync_queue, void baru dikirim setelah nota itu benar-benar
+      // tersimpan di server -- supaya server selalu menemukan nota yang tepat,
+      // bukan malah membatalkan nota lain yang kebetulan jadi "terakhir".
+      const itemVoid = qVoid[0];
+      fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'void', pin: itemVoid.pin, targetNotaId: itemVoid.targetNotaId }) })
+        .then(res => res.json())
+        .then((res) => {
+          console.log("Sync void selesai untuk nota " + itemVoid.targetNotaId + ":", res);
+          var q = JSON.parse(localStorage.getItem('sync_queue_void') || '[]');
+          q.shift();
+          localStorage.setItem('sync_queue_void', JSON.stringify(q));
+          isSyncing = false;
+          attemptSync();
+          loadStokAyam();
+        })
+        .catch((err) => { console.log("Sync void error, akan dicoba lagi: ", err); isSyncing = false; });
+    } else if (qOpr.length > 0) {
       fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'simpanDapur', payload: qOpr[0] }) }).then(res=>res.json()).then(()=>{ var q=JSON.parse(localStorage.getItem('sync_queue_opr')); q.shift(); localStorage.setItem('sync_queue_opr', JSON.stringify(q)); isSyncing = false; attemptSync(); }).catch(()=>isSyncing=false);
     } else if (qBelanja.length > 0) { 
       fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'simpanKas', payload: qBelanja[0] }) }).then(res=>res.json()).then(()=>{ var q=JSON.parse(localStorage.getItem('sync_queue_belanja')); q.shift(); localStorage.setItem('sync_queue_belanja', JSON.stringify(q)); isSyncing = false; attemptSync(); }).catch(()=>isSyncing=false);
@@ -640,4 +694,5 @@
   setInterval(attemptSync, 20000);
   handleAktivitasDapurChange('Goreng Ayam');
   loadMenuDariSheets();
+  attemptSync();
 
