@@ -80,6 +80,10 @@
     .sub-cat-btn.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
     .kembalian-text-style { font-size: 1.5rem !important; font-weight: 800; color: #2ecc71; display: block; }
     .history-log-row { font-size: 0.85rem; padding: 10px; border-bottom: 1px dashed #dee2e6; }
+    .history-struk-block { border-bottom: 2px solid #dee2e6; padding-bottom: 8px; margin-bottom: 8px; }
+    .history-struk-block:last-child { border-bottom: none; }
+    .history-struk-header { background: #f8f9fa; border-radius: 8px; padding: 6px 10px; font-size: 0.8rem; }
+    .history-struk-item { font-size: 0.8rem; padding: 4px 10px 4px 26px; color: #495057; }
     .cart-item-row { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 10px; }
     .cart-item-name { flex-grow: 1; min-width: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; font-weight: bold; color: #2d3436; }
     .cart-item-controls { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }

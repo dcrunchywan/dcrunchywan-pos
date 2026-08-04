@@ -544,15 +544,47 @@ const clientTxnId = crypto.randomUUID
     if(!container) return;
     let history = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
     if(history.length === 0) { container.innerHTML = '<div class="text-center text-muted py-3">Belum ada transaksi.</div>'; return; }
-    container.innerHTML = '';
-    history.reverse().forEach((x) => {
-      if(x.tipe === 'penjualan') {
-        let textClass = x.status === 'VOID' ? 'text-decoration-line-through text-danger' : '';
-        container.innerHTML += `<div class="history-log-row ${textClass}"><b>[${x.jam}]</b> Jual ${x.namaItem} x${x.qty} - Rp ${(x.subtotal || 0).toLocaleString('id-ID')} (${x.metode}) ${x.status === 'VOID' ? '<b>[VOID]</b>':''}</div>`;
-      } else if(x.tipe === 'kas') {
-        container.innerHTML += `<div class="history-log-row text-warning"><b>[KAS OUT]</b> ${x.jenis}: Rp ${(x.nominal || 0).toLocaleString('id-ID')}</div>`;
+
+    // Kelompokkan entri 'penjualan' per struk memakai notaIdGroup (semua
+    // item dari satu checkout SELALU berurutan di array ini karena
+    // ditulis dalam satu forEach saat prosesCheckout(), jadi cukup deteksi
+    // pergantian notaIdGroup -- tidak perlu pengelompokan global). Entri
+    // 'kas' tetap baris tersendiri, bukan bagian dari struk manapun.
+    let blocks = [];
+    history.forEach((x) => {
+      if (x.tipe === 'penjualan') {
+        let blokTerakhir = blocks[blocks.length - 1];
+        if (blokTerakhir && blokTerakhir.tipe === 'struk' && blokTerakhir.notaIdGroup === x.notaIdGroup) {
+          blokTerakhir.items.push(x);
+        } else {
+          blocks.push({ tipe: 'struk', notaIdGroup: x.notaIdGroup, jam: x.jam, metode: x.metode, status: x.status, items: [x] });
+        }
+      } else if (x.tipe === 'kas') {
+        blocks.push({ tipe: 'kas', jenis: x.jenis, nominal: x.nominal });
       }
     });
+
+    let html = '';
+    blocks.slice().reverse().forEach((b) => {
+      if (b.tipe === 'struk') {
+        const isVoid = b.status === 'VOID';
+        const textClass = isVoid ? 'text-decoration-line-through text-danger' : '';
+        const totalStruk = b.items.reduce((sum, it) => sum + (Number(it.subtotal) || 0), 0);
+        html += `<div class="history-struk-block">
+          <div class="history-struk-header d-flex justify-content-between align-items-center ${textClass}">
+            <span class="fw-bold"><i class="fas fa-receipt text-muted me-1"></i>[${b.jam}] ${b.metode}${isVoid ? ' <span class="badge bg-danger">VOID</span>' : ''}</span>
+            <span class="fw-bold">Rp ${totalStruk.toLocaleString('id-ID')}</span>
+          </div>`;
+        b.items.forEach((it) => {
+          html += `<div class="history-struk-item ${textClass}">${it.namaItem} x${it.qty} <span class="text-muted">- Rp ${(it.subtotal || 0).toLocaleString('id-ID')}</span></div>`;
+        });
+        html += `</div>`;
+      } else if (b.tipe === 'kas') {
+        html += `<div class="history-log-row text-warning"><b>[KAS OUT]</b> ${b.jenis}: Rp ${(b.nominal || 0).toLocaleString('id-ID')}</div>`;
+      }
+    });
+
+    container.innerHTML = html;
   }
 
   function hitungRekapHarian() {
