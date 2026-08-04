@@ -15,7 +15,7 @@
       applyOwnerUIVisibility();
     } else {
       Swal.fire({ title: 'Verifikasi Owner', input: 'password', inputPlaceholder: 'Masukkan PIN Owner', showCancelButton: true }).then((res) => {
-        if(res.value === "1234") {
+        if(res.value === "445566") {
           isOwnerAuthenticated = true;
           document.getElementById('ownerModeBtn')?.classList.remove('opacity-40');
           if(document.getElementById('ownerMobileBtn')) document.getElementById('ownerMobileBtn').className = "btn btn-sm btn-success py-1 px-2 fw-bold";
@@ -478,11 +478,14 @@ const clientTxnId = crypto.randomUUID
       return;
     }
 
-    Swal.fire({ title: 'Otorisasi Admin', text: 'Masukkan PIN Owner untuk pembatalan:', input: 'password', showCancelButton: true }).then((result) => {
+    Swal.fire({ title: 'Otorisasi Void', text: 'Masukkan PIN Void untuk pembatalan:', input: 'password', showCancelButton: true }).then((result) => {
       if (!result.isConfirmed) return;
-      // PIN dicek di sisi klien dulu (sama seperti mode Owner) supaya kasir
-      // tetap dapat kepastian instan walau offline. Server tetap validasi
-      // ulang PIN saat request ini akhirnya tersambung (lihat batalkanTransaksiTerakhir).
+      // PIN Void ini SENGAJA beda dari PIN Owner (lihat toggleOwnerAuth) --
+      // supaya kasir biasa bisa void struk keliru tanpa perlu tahu PIN Owner
+      // yang membuka akses admin lebih luas (dashboard, upload gambar, dll).
+      // Dicek di sisi klien dulu supaya kasir tetap dapat kepastian instan
+      // walau offline. Server tetap validasi ulang PIN saat request ini
+      // akhirnya tersambung (lihat batalkanTransaksiTerakhir di code.gs).
       if (result.value !== "1234") { Swal.fire('Gagal', 'PIN Salah!', 'error'); return; }
 
       // Tandai lokal SEKARANG (optimistic) supaya Riwayat & Rekap langsung
