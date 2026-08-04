@@ -400,15 +400,16 @@ const clientTxnId = crypto.randomUUID
       wadah: wadahDipilih 
     }); 
     
-    simpanKeHistoryLokal('penjualan', { 
-      namaItem: c.item, 
-      qty: Number(c.qty) || 1, 
-      subtotal: (Number(c.harga) * Number(c.qty)), 
-      metode: metode, 
-      isMamaProduct: isMamaProduct, 
-      jam: jamNow, 
-      status: "OK", 
-      notaIdGroup: notaIdGroup 
+    simpanKeHistoryLokal('penjualan', {
+      namaItem: c.item,
+      qty: Number(c.qty) || 1,
+      subtotal: (Number(c.harga) * Number(c.qty)),
+      metode: metode,
+      isMamaProduct: isMamaProduct,
+      jam: jamNow,
+      status: "OK",
+      notaIdGroup: notaIdGroup,
+      clientTxnId: clientTxnId
     });
   }); 
   
@@ -445,30 +446,34 @@ const clientTxnId = crypto.randomUUID
     });
   }
 
-  // Cari notaIdGroup dari penjualan lokal terakhir yang statusnya masih OK.
-  // Ini jadi target eksplisit untuk void -- BUKAN "baris terakhir di server",
-  // supaya void tidak pernah salah sasaran saat ada transaksi lain yang masih
-  // antre sync (offline) di antara transaksi yang mau dibatalkan dan sekarang.
-  function getLastLocalNotaOkId() {
+  // Cari clientTxnId dari penjualan lokal terakhir yang statusnya masih OK.
+  // clientTxnId dipakai sebagai KUNCI STABIL untuk antrian void -- BUKAN
+  // notaIdGroup, karena notaIdGroup itu timestamp buatan KLIEN yang TIDAK
+  // PERNAH sama dengan nilai yang benar-benar ditulis server ke kolom A
+  // sheet Transaksi (server menulis timestamp-nya SENDIRI, tglWib, lihat
+  // simpanData() di code.gs). Identifier server yang valid (notaIdServer)
+  // baru terisi setelah penjualan ini benar-benar sukses sync -- lihat
+  // attemptSync() bagian qKasir.
+  function getLastLocalClientTxnIdOk() {
     const history = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
     for (let k = history.length - 1; k >= 0; k--) {
-      if (history[k].tipe === 'penjualan' && history[k].status === 'OK') return history[k].notaIdGroup || "";
+      if (history[k].tipe === 'penjualan' && history[k].status === 'OK') return history[k].clientTxnId || "";
     }
     return "";
   }
 
-  function tandaiNotaVoidLokal(notaId) {
+  function tandaiNotaVoidLokal(clientTxnId) {
     let history = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
-    history.forEach(h => { if (h.notaIdGroup === notaId) h.status = 'VOID'; });
+    history.forEach(h => { if (h.clientTxnId === clientTxnId) h.status = 'VOID'; });
     localStorage.setItem('rekap_hari_ini', JSON.stringify(history));
   }
 
   function requestVoid() {
-    const targetNotaId = getLastLocalNotaOkId();
-    if (!targetNotaId) { Swal.fire('Tidak Ada Transaksi', 'Belum ada transaksi di riwayat sesi ini yang bisa di-void.', 'info'); return; }
+    const targetClientTxnId = getLastLocalClientTxnIdOk();
+    if (!targetClientTxnId) { Swal.fire('Tidak Ada Transaksi', 'Belum ada transaksi di riwayat sesi ini yang bisa di-void.', 'info'); return; }
 
     const queueVoidCek = JSON.parse(localStorage.getItem('sync_queue_void') || '[]');
-    if (queueVoidCek.some(v => v.targetNotaId === targetNotaId)) {
+    if (queueVoidCek.some(v => v.clientTxnId === targetClientTxnId)) {
       Swal.fire('Menunggu Sinkronisasi', 'Struk ini sudah diantrekan untuk di-void, menunggu koneksi internet.', 'info');
       return;
     }
@@ -482,11 +487,11 @@ const clientTxnId = crypto.randomUUID
 
       // Tandai lokal SEKARANG (optimistic) supaya Riwayat & Rekap langsung
       // konsisten dengan niat kasir, tidak menunggu jawaban server.
-      tandaiNotaVoidLokal(targetNotaId);
+      tandaiNotaVoidLokal(targetClientTxnId);
       refreshHistoryLogUI();
 
       const queueVoid = JSON.parse(localStorage.getItem('sync_queue_void') || '[]');
-      queueVoid.push({ targetNotaId: targetNotaId, pin: result.value });
+      queueVoid.push({ clientTxnId: targetClientTxnId, pin: result.value });
       localStorage.setItem('sync_queue_void', JSON.stringify(queueVoid));
 
       if (navigator.onLine) {
@@ -672,8 +677,26 @@ const clientTxnId = crypto.randomUUID
           let currentQueue = JSON.parse(localStorage.getItem('sync_queue') || '[]');
           currentQueue.splice(0, dataYangDikirim.length);
           localStorage.setItem('sync_queue', JSON.stringify(currentQueue));
-          attemptSync(); 
-          refreshHistoryLogUI(); 
+
+          // Simpan notaIdServer (identifier yang BENAR-BENAR ditulis server
+          // ke kolom A sheet Transaksi -- lihat catatan di simpanData/code.gs)
+          // ke histori lokal, supaya void nanti bisa menargetkan baris yang
+          // tepat. notaIdGroup buatan klien TIDAK BISA dipakai langsung
+          // karena tidak pernah sama dengan nilai yang ditulis server.
+          const notaIdServer = res.hasil && res.hasil.notaIdServer;
+          if (notaIdServer) {
+            const clientTxnIdsTersinkron = [...new Set(dataYangDikirim.map(it => it.clientTxnId))];
+            let historyUpdate = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
+            historyUpdate.forEach(h => {
+              if (h.tipe === 'penjualan' && clientTxnIdsTersinkron.includes(h.clientTxnId)) {
+                h.notaIdServer = notaIdServer;
+              }
+            });
+            localStorage.setItem('rekap_hari_ini', JSON.stringify(historyUpdate));
+          }
+
+          attemptSync();
+          refreshHistoryLogUI();
         } else {
           console.log("Sync ditolak server, item tetap di antrian untuk dicoba lagi:", res);
           if (statusEl) statusEl.innerText = "Gagal Sync, akan dicoba lagi";
@@ -689,10 +712,24 @@ const clientTxnId = crypto.randomUUID
       // tersimpan di server -- supaya server selalu menemukan nota yang tepat,
       // bukan malah membatalkan nota lain yang kebetulan jadi "terakhir".
       const itemVoid = qVoid[0];
-      fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'void', pin: itemVoid.pin, targetNotaId: itemVoid.targetNotaId }) })
+      const historyCek = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
+      const entriTersinkron = historyCek.find(h => h.tipe === 'penjualan' && h.clientTxnId === itemVoid.clientTxnId && h.notaIdServer);
+
+      if (!entriTersinkron) {
+        // Nota yang mau di-void belum punya notaIdServer -- penjualannya
+        // sendiri belum kelar sync (seharusnya jarang terjadi karena qKasir
+        // sudah dipastikan kosong di atas, tapi jaga-jaga). Jangan kirim
+        // dulu, biarkan tetap di antrian untuk dicoba lagi di siklus
+        // berikutnya (interval 20 detik / event online), supaya tidak kirim
+        // targetNotaId kosong ke server.
+        isSyncing = false;
+        return;
+      }
+
+      fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'void', pin: itemVoid.pin, targetNotaId: entriTersinkron.notaIdServer }) })
         .then(res => res.json())
         .then((res) => {
-          console.log("Sync void selesai untuk nota " + itemVoid.targetNotaId + ":", res);
+          console.log("Sync void selesai untuk clientTxnId " + itemVoid.clientTxnId + ":", res);
           var q = JSON.parse(localStorage.getItem('sync_queue_void') || '[]');
           q.shift();
           localStorage.setItem('sync_queue_void', JSON.stringify(q));

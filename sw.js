@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dcrunchywan-pos-cache-v4';
+const CACHE_NAME = 'dcrunchywan-pos-cache-v5';
 const urlsToCache = [
   './',
   './index.html',
@@ -10,8 +10,13 @@ const urlsToCache = [
   'https://cdn.jsdelivr.net/npm/sweetalert2@11'
 ];
 
-// Pemasangan asset ke storage internal tablet
+// Pemasangan asset ke storage internal tablet.
+// self.skipWaiting() dipanggil supaya service worker versi baru LANGSUNG
+// aktif setelah ter-install, tidak menunggu semua tab POS ditutup dulu --
+// sebelumnya ini tidak ada, jadi update kode (js-kasir.js dkk) bisa
+// tertahan lama di cache lama walau sudah di-push ke GitHub.
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       return cache.addAll(urlsToCache);
@@ -33,17 +38,23 @@ self.addEventListener('fetch', event => {
   }
 });
 
-// Pembersihan cache versi lama saat update
+// Pembersihan cache versi lama saat update, plus clients.claim() supaya
+// service worker baru langsung mengambil alih tab yang SUDAH terbuka
+// (bukan cuma tab yang dibuka setelah ini), sepasang dengan skipWaiting()
+// di atas.
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cache => {
-          if (cache !== CACHE_NAME) {
-            return caches.delete(cache);
-          }
-        })
-      );
-    })
+    Promise.all([
+      self.clients.claim(),
+      caches.keys().then(cacheNames => {
+        return Promise.all(
+          cacheNames.map(cache => {
+            if (cache !== CACHE_NAME) {
+              return caches.delete(cache);
+            }
+          })
+        );
+      })
+    ])
   );
 });
