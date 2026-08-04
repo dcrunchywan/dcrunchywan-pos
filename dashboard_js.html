@@ -73,6 +73,17 @@ function ubahMode(mode) {
   document.querySelector('.panel-nota').style.display = ringkasanTampil;
   document.getElementById('panelQris').style.display = (mode === 'qris') ? 'block' : 'none';
 
+  // PENTING: Chart.js menyimpan ukuran canvas saat dibuat/di-update. Kalau
+  // canvas-nya sempat disembunyikan (display:none, seperti saat pindah ke
+  // tab QRIS), grafiknya bisa "nyangkut" kosong walau panel sudah
+  // ditampilkan lagi -- karena ukurannya ke-cache 0 saat itu. Solusinya:
+  // hancurkan instance chart lama begitu panel-chart disembunyikan, supaya
+  // dibuat ULANG dari nol (dengan ukuran yang benar) saat ditampilkan lagi.
+  if (mode === 'qris' && chartInstance) {
+    chartInstance.destroy();
+    chartInstance = null;
+  }
+
   document.getElementById('dashFooter').innerHTML = (mode === 'qris')
     ? 'Sumber data: tab <strong>Transaksi</strong> &amp; <strong>Transaksi Mamah</strong> (gabungan, khusus QRIS)'
     : 'Sumber data: tab <strong>Transaksi</strong> &middot; tidak termasuk Transaksi Mamah';
@@ -154,7 +165,15 @@ function renderDashboard(res) {
   document.getElementById('kpiIncome').textContent = formatRupiahDash(res.incomeKotor);
   document.getElementById('kpiPengeluaran').textContent = formatRupiahDash(res.totalPengeluaran);
 
-  renderChart(res.chart);
+  // renderChart() dibungkus try/catch supaya kalau library Chart.js
+  // bermasalah (mis. gagal load dari CDN), renderMetode() & KPI di atas
+  // tetap tampil -- satu bagian gagal tidak boleh menggagalkan seluruh
+  // dashboard.
+  try {
+    renderChart(res.chart);
+  } catch (errChart) {
+    console.error('Gagal render grafik:', errChart);
+  }
   renderMetode(res.metode, res.grandTotal);
 
   if (!res.adaData) {
@@ -257,7 +276,15 @@ function renderQrisList(res) {
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+// PENTING: pakai event 'load' (bukan 'DOMContentLoaded') supaya kita
+// menunggu SEMUA resource eksternal (termasuk script Chart.js dari CDN)
+// benar-benar selesai dimuat dulu sebelum render pertama. Di dalam sandbox
+// Google Apps Script HtmlService, script eksternal tidak selalu dijamin
+// selesai load sebelum DOMContentLoaded seperti di halaman web biasa --
+// kalau dipaksa render sebelum Chart.js siap, window.Chart masih undefined
+// dan renderChart() akan melempar error yang menggagalkan sisa render
+// (termasuk renderMetode() yang dipanggil setelahnya di fungsi yang sama).
+window.addEventListener('load', () => {
   inisialisasiPicker();
   muatUlangData();
 });
