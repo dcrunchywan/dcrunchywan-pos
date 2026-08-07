@@ -46,6 +46,15 @@ function formatRupiah(angka) {
             }
           });
         });
+
+        // PENTING: browser TIDAK otomatis sering-sering cek sw.js kalau tab
+        // dibiarkan terbuka lama (khas tablet kasir yang jarang di-reload
+        // manual) -- register() cuma cek sekali saat itu. Jadi di sini kita
+        // PAKSA cek update: langsung sekali sekarang, lalu berkala tiap 5
+        // menit selama tab terbuka, supaya tombol "Update" tetap ketahuan
+        // muncul tanpa perlu reload manual sama sekali.
+        reg.update();
+        setInterval(function() { reg.update(); }, 5 * 60 * 1000);
       }, function(err) { console.log('ServiceWorker Gagal: ', err); });
 
       // Setelah tombol Update ditekan (SKIP_WAITING terkirim) dan service
