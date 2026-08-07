@@ -3,6 +3,7 @@
   let diskonTipe = 'Rp'; let numpadBootstrapModalInstance = null;
 
   document.getElementById('rekapDatePicker').value = new Date().toISOString().split('T')[0];
+  document.getElementById('historyDatePicker').value = new Date().toISOString().split('T')[0];
 
 
   function toggleOwnerAuth() {
@@ -600,8 +601,13 @@ const clientTxnId = crypto.randomUUID
   function refreshHistoryLogUI() {
     const container = document.getElementById('kasirHistoryLogContainer');
     if(!container) return;
-    let history = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
-    if(history.length === 0) { container.innerHTML = '<div class="text-center text-muted py-3">Belum ada transaksi.</div>'; return; }
+    const tglPilihan = document.getElementById('historyDatePicker')?.value || new Date().toISOString().split('T')[0];
+    const historySemua = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
+    // Filter ke tanggal yang dipilih saja (tglIso sudah disimpan per-entry
+    // oleh simpanKeHistoryLokal) -- supaya riwayat kemarin tidak campur
+    // dengan hari ini, dan bisa lihat riwayat tanggal lain lewat picker.
+    let history = historySemua.filter(x => (x.tglIso || new Date().toISOString().split('T')[0]) === tglPilihan);
+    if(history.length === 0) { container.innerHTML = '<div class="text-center text-muted py-3">Belum ada transaksi di tanggal ini.</div>'; return; }
 
     // Kelompokkan entri 'penjualan' per struk memakai notaIdGroup (semua
     // item dari satu checkout SELALU berurutan di array ini karena

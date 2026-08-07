@@ -309,9 +309,12 @@
     <!-- 6. PANEL LOG RIWAYAT SHIFT -->
     <div class="tab-pane fade" id="panel-history">
       <div class="card p-3 mx-auto border-0 shadow-sm" style="max-width: 600px; border-radius:12px;">
-        <h5 class="fw-bold mb-3 text-dark text-center"><i class="fas fa-history text-muted me-2"></i>Log Riwayat Transaksi Shift Hari Ini</h5>
+        <h5 class="fw-bold mb-2 text-dark text-center"><i class="fas fa-history text-muted me-2"></i>Log Riwayat Transaksi</h5>
+        <div class="mb-3">
+          <input type="date" id="historyDatePicker" class="form-control form-control-sm" onchange="refreshHistoryLogUI()">
+        </div>
         <div id="kasirHistoryLogContainer" style="max-height: 450px; overflow-y: auto;">
-          <div class="text-center text-muted py-3">Belum ada transaksi di shift ini.</div>
+          <div class="text-center text-muted py-3">Belum ada transaksi di tanggal ini.</div>
         </div>
       </div>
     </div>
