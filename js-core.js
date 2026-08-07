@@ -16,10 +16,46 @@ function formatRupiah(angka) {
     document.querySelector('.sidebar-overlay')?.classList.remove('show'); 
   }
 
+  // Tampilkan tombol "Update" (elemen ber-class .update-available-btn, ada
+  // di sidebar & header mobile) begitu ketahuan ada versi baru yang sudah
+  // ter-install tapi masih menunggu -- kasir yang pilih kapan mau pindah,
+  // bukan otomatis. Sengaja dibuat sesederhana mungkin: satu tombol, satu
+  // aksi, tanpa versi/channel macam-macam.
+  function tampilkanTombolUpdate(workerBaru) {
+    document.querySelectorAll('.update-available-btn').forEach(function(btn) {
+      btn.style.display = 'inline-flex';
+      btn.onclick = function() { workerBaru.postMessage('SKIP_WAITING'); };
+    });
+  }
+
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
       navigator.serviceWorker.register('sw.js').then(function(reg) {
         console.log('ServiceWorker Aktif di scope: ', reg.scope);
+
+        if (reg.waiting) { tampilkanTombolUpdate(reg.waiting); }
+
+        reg.addEventListener('updatefound', function() {
+          var workerBaru = reg.installing;
+          if (!workerBaru) return;
+          workerBaru.addEventListener('statechange', function() {
+            // 'installed' + sudah ada controller (bukan install pertama kali)
+            // berarti ini update untuk versi yang SUDAH terpasang sebelumnya.
+            if (workerBaru.state === 'installed' && navigator.serviceWorker.controller) {
+              tampilkanTombolUpdate(workerBaru);
+            }
+          });
+        });
       }, function(err) { console.log('ServiceWorker Gagal: ', err); });
+
+      // Setelah tombol Update ditekan (SKIP_WAITING terkirim) dan service
+      // worker baru selesai ambil alih, reload SEKALI supaya halaman benar-benar
+      // pakai kode versi baru.
+      var sudahReload = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function() {
+        if (sudahReload) return;
+        sudahReload = true;
+        window.location.reload();
+      });
     });
   }
