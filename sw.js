@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dcrunchywan-pos-cache-v5';
+const CACHE_NAME = 'dcrunchywan-pos-cache-v6';
 const urlsToCache = [
   './',
   './index.html',
@@ -24,15 +24,27 @@ self.addEventListener('install', event => {
   );
 });
 
-// Intersepsi request browser ketika internet offline / terputus
+// PENTING: strategi NETWORK-FIRST (bukan cache-first seperti sebelumnya).
+// Tablet SELALU coba ambil versi TERBARU dari internet dulu setiap kali
+// buka/refresh app -- cache cuma dipakai sebagai cadangan kalau memang
+// sedang offline. Ini sengaja diganti dari cache-first supaya update kode
+// otomatis kepakai begitu ada koneksi, TANPA perlu hard refresh/unregister
+// manual di tablet setiap kali ada perubahan -- sebelumnya cache-first
+// bikin tablet bisa "terkunci" ke versi lama walau online, karena cache
+// selalu dicek duluan sebelum jaringan.
 self.addEventListener('fetch', event => {
   // Hanya tangani request GET halaman lokal agar data POST transaksi tidak macet
   if (event.request.method === 'GET' && !event.request.url.includes('script.google.com')) {
     event.respondWith(
-      caches.match(event.request).then(response => {
-        return response || fetch(event.request).catch(() => {
-          return caches.match('./index.html');
-        });
+      fetch(event.request).then(networkResponse => {
+        // Simpan salinan terbaru ke cache supaya tetap ada cadangan offline
+        // yang up-to-date (bukan snapshot beku dari saat install pertama).
+        const responseClone = networkResponse.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
+        return networkResponse;
+      }).catch(() => {
+        // Offline / jaringan gagal -> baru pakai cache sebagai fallback
+        return caches.match(event.request).then(cached => cached || caches.match('./index.html'));
       })
     );
   }
