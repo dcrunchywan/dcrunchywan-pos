@@ -79,7 +79,7 @@
     .cart-box { background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); padding: 15px; display: flex; flex-direction: column; }
     @media (min-width: 992px) { .cart-box { position: sticky; top: 0px; height: calc(100vh - 40px); } .cart-items-list { flex-grow: 1; overflow-y: auto; } }
     
-    .cat-pill-btn { border-radius: 15px; font-size: 0.78rem; font-weight: 700; padding: 5px 12px; border: 1px solid #dee2e6; background: #fff; color: #495057; white-space: nowrap; transition: 0.2s; }
+    .cat-pill-btn { border-radius: 18px; font-size: 0.92rem; font-weight: 700; padding: 10px 18px; border: 1px solid #dee2e6; background: #fff; color: #495057; white-space: nowrap; transition: 0.2s; }
     .cat-pill-btn.active { background: var(--dark-color); color: #fff; border-color: var(--dark-color); }
     .sub-cat-btn { border-radius: 12px; font-size: 0.72rem; font-weight: 600; padding: 4px 10px; border: 1px solid #e9ecef; background: #f8f9fa; color: #6c757d; }
     .sub-cat-btn.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
@@ -92,7 +92,13 @@
     .cart-item-row { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 10px; }
     .cart-item-name { flex-grow: 1; min-width: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; font-weight: bold; color: #2d3436; }
     .cart-item-controls { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
-    .qty-control { max-width: 48px !important; font-weight: bold; text-align: center; padding: 2px !important; height: 28px !important; }
+    .qty-control { max-width: 38px !important; font-weight: bold; text-align: center; padding: 2px !important; height: 28px !important; }
+    .qty-stepper { display: flex; align-items: center; gap: 3px; }
+    .qty-step-btn { width: 26px; height: 26px; flex-shrink: 0; border: 1px solid #dee2e6; background: #fff; border-radius: 6px; font-weight: 800; font-size: 1rem; line-height: 1; color: #495057; display: flex; align-items: center; justify-content: center; padding: 0; }
+    .qty-step-btn:active { background: #e9ecef; }
+    /* Jarak ekstra dari tombol hapus supaya tidak ke-pencet tidak sengaja
+       saat menekan tombol +/- qty di sebelahnya. */
+    .cart-delete-btn { margin-left: 12px; }
 
     .popup-layout-container { display: flex; gap: 15px; align-items: stretch; }
     .popup-info-side { width: 45%; background: #ffffff; border-right: 1px solid #dee2e6; padding-right: 15px; display: flex; flex-direction: column; justify-content: center; }
@@ -102,7 +108,14 @@
     .popup-numpad-btn:active { background: #e2e6ea; }
     .popup-numpad-btn.btn-action { background: #ffeaa7; border-color: #f1c40f; }
     .popup-numpad-btn.btn-clear { background: #ff7675; border-color: #d63031; color: white; }
-    .popup-numpad-btn.btn-shortcut { background: #55efc4; border-color: #00b894; color: #044137; font-size: 1.05rem; }
+    .popup-numpad-btn.btn-shortcut { background: #3498db; border-color: #2980b9; color: #fff; font-size: 1.05rem; }
+
+    /* Tombol BAYAR utama & konfirmasi-bayar di popup numpad -- warna hijau
+       (aksi final/sukses), beda dari tombol lain di layar. */
+    .btn-pay { background-color: #2ecc71; border-color: #27ae60; color: #fff; }
+    .btn-pay:hover, .btn-pay:active, .btn-pay:focus { background-color: #27ae60 !important; border-color: #219150 !important; color: #fff; }
+    .btn-konfirmasi-bayar { background-color: #2ecc71; border-color: #27ae60; color: #fff; }
+    .btn-konfirmasi-bayar:hover, .btn-konfirmasi-bayar:active, .btn-konfirmasi-bayar:focus { background-color: #27ae60 !important; border-color: #219150 !important; color: #fff; }
 
     .metode-bayar-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
     .metode-bayar-btn { border: 2px solid #dee2e6; background: #fff; color: #495057; font-weight: 700; font-size: 0.8rem; padding: 12px 4px; border-radius: 12px; transition: 0.15s; }
