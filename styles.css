@@ -97,6 +97,12 @@
     .popup-numpad-btn:active { background: #e2e6ea; }
     .popup-numpad-btn.btn-action { background: #ffeaa7; border-color: #f1c40f; }
     .popup-numpad-btn.btn-clear { background: #ff7675; border-color: #d63031; color: white; }
-    
+    .popup-numpad-btn.btn-shortcut { background: #55efc4; border-color: #00b894; color: #044137; font-size: 1.05rem; }
+
+    .metode-bayar-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .metode-bayar-btn { border: 2px solid #dee2e6; background: #fff; color: #495057; font-weight: 700; font-size: 0.8rem; padding: 12px 4px; border-radius: 12px; transition: 0.15s; }
+    .metode-bayar-btn:active { transform: scale(0.96); }
+    .metode-bayar-btn.active { background: var(--primary-color); border-color: var(--primary-color); color: #fff; box-shadow: 0 3px 8px rgba(230,126,34,0.35); }
+
     .dashboard-card { border: none; border-radius: 12px; transition: transform 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.03); }
     .dashboard-card:hover { transform: translateY(-3px); }

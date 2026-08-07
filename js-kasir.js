@@ -68,22 +68,72 @@
 
   function pressNumpadPopup(key) {
     let currentDisplay = document.getElementById('numpadPopupDisplay').innerText;
-    if(key === 'C') { currentDisplay = '0'; } 
+    if(key === 'C') { currentDisplay = '0'; }
     else { if(currentDisplay === '0') { currentDisplay = (key === '00' || key === '000') ? '0' : key; } else { currentDisplay += key; } }
     document.getElementById('numpadPopupDisplay').innerText = currentDisplay;
     const nilaiMasukUang = parseInt(currentDisplay, 10) || 0;
     document.getElementById('uangBayar').value = nilaiMasukUang;
+    updateKembalianLivePopup(nilaiMasukUang);
+  }
+
+  // Shortcut pecahan uang (mis. +50.000/+100.000) -- DITAMBAHKAN ke nominal
+  // yang sedang diketik, bukan menimpanya, supaya cocok dengan cara kasir
+  // menyusun lembar uang fisik yang diterima dari pembeli.
+  function tambahNumpadPopup(nilaiTambah) {
+    const displayEl = document.getElementById('numpadPopupDisplay');
+    const nilaiSekarang = parseInt(displayEl.innerText, 10) || 0;
+    const nilaiBaru = nilaiSekarang + nilaiTambah;
+    displayEl.innerText = String(nilaiBaru);
+    document.getElementById('uangBayar').value = nilaiBaru;
+    updateKembalianLivePopup(nilaiBaru);
+  }
+
+  function updateKembalianLivePopup(nilaiUang) {
     const diskonVal = parseInt(document.getElementById('diskonNotaInput').value, 10) || 0;
     let nominalPotongan = (diskonTipe === 'Rp') ? diskonVal : Math.round(totalBelanjaGlobal * (diskonVal / 100));
     const finalTagihan = Math.max(0, totalBelanjaGlobal - nominalPotongan);
-    const kembalianLive = nilaiMasukUang - finalTagihan;
+    const kembalianLive = nilaiUang - finalTagihan;
+    const elKembalian = document.getElementById('numpadPopupKembalianLive');
     if (kembalianLive >= 0) {
-      document.getElementById('numpadPopupKembalianLive').innerText = 'Rp ' + kembalianLive.toLocaleString('id-ID');
-      document.getElementById('numpadPopupKembalianLive').style.color = '#2ecc71';
+      elKembalian.innerText = 'Rp ' + kembalianLive.toLocaleString('id-ID');
+      elKembalian.style.color = '#2ecc71';
     } else {
-      document.getElementById('numpadPopupKembalianLive').innerText = 'Kurang: Rp ' + Math.abs(kembalianLive).toLocaleString('id-ID');
-      document.getElementById('numpadPopupKembalianLive').style.color = '#e74c3c';
+      elKembalian.innerText = 'Kurang: Rp ' + Math.abs(kembalianLive).toLocaleString('id-ID');
+      elKembalian.style.color = '#e74c3c';
     }
+  }
+
+  // Tombol konfirmasi DI DALAM popup keypad sekaligus jadi tombol "Bayar" --
+  // begitu kasir menekannya, nominal & kembalian sudah ter-set (dari
+  // pressNumpadPopup/tambahNumpadPopup), tinggal langsung proses checkout,
+  // supaya kasir tidak perlu menekan BAYAR dua kali.
+  function konfirmasiTunaiDanBayar() {
+    hitungKembalian();
+    prosesCheckout();
+  }
+
+  // Sumber kebenaran metode bayar tetap <select id="metodeBayar"> (disembunyikan)
+  // supaya semua fungsi lain yang sudah baca .value-nya tidak perlu diubah --
+  // tombol besar di UI cuma "mendorong" nilai ke select itu.
+  function pilihMetodeBayar(metode) {
+    document.getElementById('metodeBayar').value = metode;
+    document.querySelectorAll('.metode-bayar-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.metode === metode);
+    });
+    handleMetodeBayarChange();
+  }
+
+  // Titik masuk tombol BAYAR: Cash (tanpa mode bypass) buka popup keypad
+  // dulu -- metode lain (atau Cash+bypass, yang memang pas uang) langsung
+  // diproses tanpa perlu isi nominal.
+  function handleTombolBayar() {
+    if (cart.length === 0) { Swal.fire({ icon: 'warning', title: 'Keranjang Kosong' }); return; }
+    const metode = document.getElementById('metodeBayar').value;
+    if (metode === 'Cash' && !bypassModeActive) {
+      bukaPopupNumpad();
+      return;
+    }
+    prosesCheckout();
   }
 
   function applyOwnerUIVisibility() {

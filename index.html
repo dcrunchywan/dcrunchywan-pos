@@ -91,7 +91,9 @@
                 <h4 class="text-danger fw-bold m-0" id="totalHarga">Rp 0</h4>
               </div>
 
-              <div class="row g-1 mb-1">
+              <!-- Wadah (Takeout/Dine In) & Potongan nota disembunyikan sementara,
+                   dipakai lagi nanti -- default Takeout, diskon 0 selama disembunyikan. -->
+              <div class="row g-1 mb-1" id="wadahDiskonWrapper" style="display:none;">
                 <div class="col-4">
                   <select id="wadahTipeInput" class="form-select form-select-sm fw-bold border-primary" style="font-size: 0.7rem;">
                     <option value="Takeout">Takeout</option>
@@ -105,28 +107,36 @@
                   </div>
                 </div>
               </div>
-              
-              <div class="row g-1 mb-1">
-                <div class="col-6 col-lg-12 mb-1">
-                  <select id="metodeBayar" class="form-select form-select-sm fw-bold" onchange="handleMetodeBayarChange()">
-                    <option value="Cash">Cash (Tunai)</option>
-                    <option value="Qris">QRIS</option>
-                    <option value="Grab">GrabFood</option>
-                    <option value="gojek">GoFood</option>
-                    <option value="Shoppee">ShopeeFood</option>
-                  </select>
-                </div>
-                <div class="col-6 col-lg-12">
-                  <input type="text" id="uangBayar" class="form-control form-control-sm text-center fw-bold text-success bg-light" placeholder="Klik Isi Uang Laci" onclick="bukaPopupNumpad()" readonly style="cursor: pointer;">
-                </div>
-                <div class="col-12 text-center bg-light rounded border py-1 d-none d-lg-block" id="kembalianWrapperMobile">
-                  <span class="kembalian-text-style" id="uangKembalian" style="font-size:0.95rem !important;">Kembali: Rp 0</span>
-                </div>
+
+              <!-- Metode Bayar -- tombol besar (bukan dropdown) supaya gampang di-tap -->
+              <div class="metode-bayar-grid mb-2" id="metodeBayarGrid">
+                <button type="button" class="metode-bayar-btn active" data-metode="Cash" onclick="pilihMetodeBayar('Cash')">Cash</button>
+                <button type="button" class="metode-bayar-btn" data-metode="Qris" onclick="pilihMetodeBayar('Qris')">QRIS</button>
+                <button type="button" class="metode-bayar-btn" data-metode="Grab" onclick="pilihMetodeBayar('Grab')">GrabFood</button>
+                <button type="button" class="metode-bayar-btn" data-metode="gojek" onclick="pilihMetodeBayar('gojek')">GoFood</button>
+                <button type="button" class="metode-bayar-btn" data-metode="Shoppee" onclick="pilihMetodeBayar('Shoppee')">ShopeeFood</button>
               </div>
-              
+              <!-- Select asli disembunyikan, tetap jadi "sumber kebenaran" nilai metode
+                   bayar supaya semua fungsi JS yang sudah ada tidak perlu diubah. -->
+              <select id="metodeBayar" style="display:none;">
+                <option value="Cash">Cash (Tunai)</option>
+                <option value="Qris">QRIS</option>
+                <option value="Grab">GrabFood</option>
+                <option value="gojek">GoFood</option>
+                <option value="Shoppee">ShopeeFood</option>
+              </select>
+
+              <!-- Uang bayar sekarang diisi lewat popup keypad (dipicu tombol BAYAR),
+                   bukan field terpisah -- tetap disimpan sebagai nilai internal. -->
+              <input type="hidden" id="uangBayar" value="">
+
+              <div class="col-12 text-center bg-light rounded border py-1 mb-1 d-none d-lg-block" id="kembalianWrapperMobile">
+                <span class="kembalian-text-style" id="uangKembalian" style="font-size:0.95rem !important;">Kembali: Rp 0</span>
+              </div>
+
               <div class="d-flex gap-2 w-100 align-items-stretch mt-1">
                 <div class="flex-grow-1">
-                  <button onclick="prosesCheckout()" class="btn btn-warning w-100 h-100 fw-bold text-white py-2 btn-pay shadow-sm">
+                  <button onclick="handleTombolBayar()" class="btn btn-warning w-100 h-100 fw-bold text-white py-2 btn-pay shadow-sm">
                     <i class="fas fa-print me-1"></i>BAYAR
                   </button>
                 </div>
@@ -182,9 +192,13 @@
                   <button class="popup-numpad-btn btn-action" onclick="pressNumpadPopup('00')">00</button>
                 </div>
                 <button class="popup-numpad-btn btn-action w-100 fw-bold mt-2 py-2" onclick="pressNumpadPopup('000')">000 (RIBU)</button>
+                <div class="d-flex gap-2 mt-2">
+                  <button class="popup-numpad-btn btn-shortcut flex-fill fw-bold py-2" onclick="tambahNumpadPopup(50000)">+50.000</button>
+                  <button class="popup-numpad-btn btn-shortcut flex-fill fw-bold py-2" onclick="tambahNumpadPopup(100000)">+100.000</button>
+                </div>
               </div>
             </div>
-            <button class="btn btn-dark w-100 fw-bold py-3 fs-5 mt-4 shadow-sm rounded-3" data-bs-dismiss="modal" onclick="hitungKembalian()">KONFIRMASI DAN MASUKKAN DATA</button>
+            <button class="btn btn-dark w-100 fw-bold py-3 fs-5 mt-4 shadow-sm rounded-3" data-bs-dismiss="modal" onclick="konfirmasiTunaiDanBayar()">KONFIRMASI &amp; BAYAR</button>
           </div>
         </div>
       </div>
