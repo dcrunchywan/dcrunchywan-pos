@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dcrunchywan-pos-cache-v6';
+const CACHE_NAME = 'dcrunchywan-pos-cache-v7';
 const urlsToCache = [
   './',
   './index.html',
@@ -34,27 +34,24 @@ self.addEventListener('message', event => {
   }
 });
 
-// PENTING: strategi NETWORK-FIRST (bukan cache-first seperti sebelumnya).
-// Tablet SELALU coba ambil versi TERBARU dari internet dulu setiap kali
-// buka/refresh app -- cache cuma dipakai sebagai cadangan kalau memang
-// sedang offline. Ini sengaja diganti dari cache-first supaya update kode
-// otomatis kepakai begitu ada koneksi, TANPA perlu hard refresh/unregister
-// manual di tablet setiap kali ada perubahan -- sebelumnya cache-first
-// bikin tablet bisa "terkunci" ke versi lama walau online, karena cache
-// selalu dicek duluan sebelum jaringan.
+// PENTING: KEMBALI ke CACHE-FIRST (sempat diganti network-first, tapi itu
+// bikin app shell ikut menunggu jaringan setiap dibuka -- buruk untuk app
+// yang harus tetap cepat & andal walau offline/sinyal jelek). Sekarang app
+// selalu buka INSTAN dari cache. Update konten (index.html/js-kasir.js/dst)
+// tetap kepakai dengan aman lewat jalur LAIN: karena skipWaiting() tidak
+// otomatis (lihat 'install' di atas), versi baru (termasuk urlsToCache
+// terbaru) di-cache di bawah CACHE_NAME BARU saat install, tapi baru
+// benar-benar dipakai setelah kasir menekan tombol "Update" -- jadi tombol
+// itu sekarang menggerbangi SEMUA perubahan (kode sw.js MAUPUN isi
+// halaman), bukan cuma sw.js seperti sebelumnya.
 self.addEventListener('fetch', event => {
   // Hanya tangani request GET halaman lokal agar data POST transaksi tidak macet
   if (event.request.method === 'GET' && !event.request.url.includes('script.google.com')) {
     event.respondWith(
-      fetch(event.request).then(networkResponse => {
-        // Simpan salinan terbaru ke cache supaya tetap ada cadangan offline
-        // yang up-to-date (bukan snapshot beku dari saat install pertama).
-        const responseClone = networkResponse.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
-        return networkResponse;
-      }).catch(() => {
-        // Offline / jaringan gagal -> baru pakai cache sebagai fallback
-        return caches.match(event.request).then(cached => cached || caches.match('./index.html'));
+      caches.match(event.request).then(response => {
+        return response || fetch(event.request).catch(() => {
+          return caches.match('./index.html');
+        });
       })
     );
   }
