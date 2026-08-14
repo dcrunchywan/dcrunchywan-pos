@@ -39,14 +39,165 @@
     else { minyWrapper.style.display = "none"; lblQty.innerText = "Jumlah Rusak / Sisa (Potong)"; }
   }
 
+  function setStokAyamStatusBadge(state) {
+    const badge = document.getElementById('stokAyamStatusBadge');
+    if (!badge) return;
+    if (state === 'loading') {
+      badge.className = 'badge rounded-pill bg-secondary extra-small';
+      badge.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Memuat...';
+    } else if (state === 'terkini') {
+      badge.className = 'badge rounded-pill bg-success extra-small';
+      badge.innerHTML = '<i class="fas fa-check me-1"></i>Terkini dari server';
+    } else if (state === 'estimasi') {
+      badge.className = 'badge rounded-pill bg-warning text-dark extra-small';
+      badge.innerHTML = '<i class="fas fa-triangle-exclamation me-1"></i>Estimasi lokal';
+    } else {
+      badge.className = 'badge rounded-pill bg-secondary extra-small';
+      badge.innerHTML = '<i class="fas fa-plug-circle-xmark me-1"></i>Offline, belum ada data';
+    }
+  }
+
+  function tampilkanStokAyam(data) {
+    document.getElementById('liveStokMentah').innerText = (data.stokMentah || 0) + " Ptg";
+    document.getElementById('liveStokEtalase').innerText = (data.stokEtalase || 0) + " Ptg";
+    document.getElementById('liveStokMinyak').innerText = (data.stokMinyakBaku || 0) + " L";
+  }
+
+  // Estimasi OFFLINE: mulai dari nilai server TERAKHIR yang berhasil diambil
+  // (base), lalu terapkan efek setiap aksi yang MASIH MENUNGGU sync (belum
+  // dikonfirmasi server) -- persis meniru logika sesuaikanStokBarang() di
+  // server (simpanData/simpanLogOperasional). Void SENGAJA tidak dihitung di
+  // sini (disepakati tetap sederhana) -- kasusnya jarang & akan otomatis
+  // benar lagi begitu koneksi kembali dan angka server diambil ulang.
+  function computeOptimisticStokEstimate(base) {
+    let mentah = Number(base.stokMentah) || 0;
+    let etalase = Number(base.stokEtalase) || 0;
+    let minyak = Number(base.stokMinyakBaku) || 0;
+
+    const qSales = JSON.parse(localStorage.getItem('sync_queue') || '[]');
+    qSales.forEach(row => {
+      const nama = (row.item || '').toLowerCase();
+      const isAyam = !row.isMama && (nama.indexOf('ayam') !== -1 || nama.indexOf('geprek') !== -1);
+      if (isAyam) etalase -= Number(row.qty) || 0;
+    });
+
+    const qOpr = JSON.parse(localStorage.getItem('sync_queue_opr') || '[]');
+    qOpr.forEach(row => {
+      const qty = Number(row.qty) || 0;
+      if (row.jenisAktivitas === 'Ayam Masuk') {
+        mentah += qty;
+      } else if (row.jenisAktivitas === 'Goreng Ayam') {
+        mentah -= qty;
+        etalase += qty;
+        const qtyMinyak = Number(row.minyakUsed) || 0;
+        if (qtyMinyak > 0) minyak -= qtyMinyak;
+      } else if (row.jenisAktivitas === 'Ayam Waste') {
+        etalase -= qty;
+      }
+    });
+
+    return {
+      stokMentah: Math.max(0, mentah),
+      stokEtalase: Math.max(0, etalase),
+      stokMinyakBaku: Math.max(0, minyak)
+    };
+  }
+
   function loadStokAyam() {
+    setStokAyamStatusBadge('loading');
     fetch(`${API_URL}?aksi=ambilStokAyam`)
       .then(res => res.json())
       .then(res => {
-        document.getElementById('liveStokMentah').innerText = (res.stokMentah || 0) + " Ptg";
-        document.getElementById('liveStokEtalase').innerText = (res.stokEtalase || 0) + " Ptg";
-        document.getElementById('liveStokMinyak').innerText = (res.stokMinyakBaku || 0) + " L";
-      }).catch(err => console.log("Offline mode: Gagal load real-time stok ayam"));
+        tampilkanStokAyam(res);
+        localStorage.setItem('cache_stok_ayam', JSON.stringify(res));
+        setStokAyamStatusBadge('terkini');
+      }).catch(err => {
+        console.log("Offline mode: Gagal load real-time stok ayam, pakai estimasi lokal.");
+        const cacheRaw = localStorage.getItem('cache_stok_ayam');
+        if (!cacheRaw) { setStokAyamStatusBadge('offline'); return; }
+        const estimasi = computeOptimisticStokEstimate(JSON.parse(cacheRaw));
+        tampilkanStokAyam(estimasi);
+        setStokAyamStatusBadge('estimasi');
+      });
+  }
+
+  // Ringkasan HARI INI (ayam digoreng, ayam terjual, pemakaian minyak) di
+  // tab Dapur. Kalau fetch gagal (offline), JANGAN cuma diamkan angka lama
+  // apa adanya -- itu justru bisa membuat karyawan mengira input barusan
+  // "tidak masuk" (karena angka di layar tidak berubah) lalu input dobel.
+  // Sebagai gantinya: mulai dari cache server TERAKHIR, lalu tambahkan
+  // efek entri yang MASIH MENUNGGU sync (computeOptimisticRingkasanEstimate),
+  // supaya begitu karyawan simpan data dapur, angka di panel ini langsung
+  // ikut naik walau belum online -- ditandai jelas sebagai "Estimasi lokal".
+  function setDapurStatusBadge(state, waktuLabel) {
+    const badge = document.getElementById('dapurStatusBadge');
+    if (!badge) return;
+    if (state === 'loading') {
+      badge.className = 'badge rounded-pill bg-secondary extra-small';
+      badge.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Memuat...';
+    } else if (state === 'terkini') {
+      badge.className = 'badge rounded-pill bg-success extra-small';
+      badge.innerHTML = '<i class="fas fa-check me-1"></i>Data terkini';
+    } else if (state === 'estimasi') {
+      badge.className = 'badge rounded-pill bg-warning text-dark extra-small';
+      badge.innerHTML = '<i class="fas fa-triangle-exclamation me-1"></i>Estimasi lokal' + (waktuLabel ? (' (server: ' + waktuLabel + ')') : '');
+    } else {
+      badge.className = 'badge rounded-pill bg-secondary extra-small';
+      badge.innerHTML = '<i class="fas fa-plug-circle-xmark me-1"></i>Offline, belum ada data';
+    }
+  }
+
+  function tampilkanRingkasanDapur(res) {
+    document.getElementById('ringkasanAyamGoreng').innerText = (res.ayamDigoreng || 0).toLocaleString('id-ID');
+    document.getElementById('ringkasanAyamTerjual').innerText = (res.ayamTerjual || 0).toLocaleString('id-ID');
+    document.getElementById('ringkasanMinyak').innerText = (res.pemakaianMinyak || 0).toLocaleString('id-ID') + ' L';
+  }
+
+  // Sama pola-nya dengan computeOptimisticStokEstimate() -- base dari cache
+  // server terakhir, ditambah efek entri yang masih di sync_queue/sync_queue_opr.
+  // Void SENGAJA tidak dihitung (konsisten dengan estimasi stok di atas).
+  function computeOptimisticRingkasanEstimate(base) {
+    let ayamDigoreng = Number(base.ayamDigoreng) || 0;
+    let ayamTerjual = Number(base.ayamTerjual) || 0;
+    let pemakaianMinyak = Number(base.pemakaianMinyak) || 0;
+
+    const qSales = JSON.parse(localStorage.getItem('sync_queue') || '[]');
+    qSales.forEach(row => {
+      const nama = (row.item || '').toLowerCase();
+      const isAyam = !row.isMama && (nama.indexOf('ayam') !== -1 || nama.indexOf('geprek') !== -1);
+      if (isAyam) ayamTerjual += Number(row.qty) || 0;
+    });
+
+    const qOpr = JSON.parse(localStorage.getItem('sync_queue_opr') || '[]');
+    qOpr.forEach(row => {
+      if (row.jenisAktivitas === 'Goreng Ayam') {
+        ayamDigoreng += Number(row.qty) || 0;
+        pemakaianMinyak += Number(row.minyakUsed) || 0;
+      }
+    });
+
+    return { ayamDigoreng: ayamDigoreng, ayamTerjual: ayamTerjual, pemakaianMinyak: pemakaianMinyak };
+  }
+
+  function loadRingkasanDapurHariIni() {
+    setDapurStatusBadge('loading');
+    fetch(`${API_URL}?aksi=ambilLogDapurHariIni`)
+      .then(res => res.json())
+      .then(res => {
+        if (!res || res.status !== 'ok') throw new Error('Respon tidak valid');
+        tampilkanRingkasanDapur(res);
+        localStorage.setItem('cache_ringkasan_dapur', JSON.stringify({ data: res, waktu: new Date().toISOString() }));
+        setDapurStatusBadge('terkini');
+      })
+      .catch(err => {
+        console.log("Offline mode: Gagal load ringkasan dapur hari ini, pakai estimasi lokal.");
+        const cacheRaw = localStorage.getItem('cache_ringkasan_dapur');
+        if (!cacheRaw) { setDapurStatusBadge('offline'); return; }
+        const cache = JSON.parse(cacheRaw);
+        const estimasi = computeOptimisticRingkasanEstimate(cache.data);
+        tampilkanRingkasanDapur(estimasi);
+        setDapurStatusBadge('estimasi', new Date(cache.waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
+      });
   }
 
   function toggleTipeDiskon() {
@@ -697,26 +848,32 @@ const clientTxnId = crypto.randomUUID
 
   function clearRekapHarian() { Swal.fire({ title: 'Hapus Sesi?', icon: 'warning', showCancelButton: true }).then((r) => { if (r.isConfirmed) { localStorage.removeItem('rekap_hari_ini'); document.getElementById('modalAwalInput').value = 0; hitungRekapHarian(); Swal.fire('Cleared!', '', 'success'); } }); }
 
-  function attemptSync() { 
-    if (isSyncing) return; 
-    const statusEl = document.getElementById('syncStatus'); 
+  function attemptSync() {
+    if (isSyncing) return;
+    const statusEl = document.getElementById('syncStatus');
+
+    // PENTING: cek navigator.onLine PALING AWAL, terlepas dari isi antrian --
+    // sebelumnya status "Offline" cuma ditampilkan kalau kebetulan ADA
+    // antrian menunggu sync, jadi kalau device offline tapi belum ada
+    // transaksi baru yang di-queue, badge tetap nyangkut di "Online" padahal
+    // sebenarnya tidak terhubung sama sekali.
+    if (!navigator.onLine) {
+      if (statusEl) { statusEl.innerText = "Offline"; statusEl.className = "badge bg-secondary extra-small"; }
+      return;
+    }
+
     const qKasir = JSON.parse(localStorage.getItem('sync_queue') || '[]');
     const qVoid = JSON.parse(localStorage.getItem('sync_queue_void') || '[]');
     const qOpr = JSON.parse(localStorage.getItem('sync_queue_opr') || '[]');
     const qBelanja = JSON.parse(localStorage.getItem('sync_queue_belanja') || '[]');
 
     if(qKasir.length === 0 && qVoid.length === 0 && qOpr.length === 0 && qBelanja.length === 0) {
-      if(statusEl) statusEl.innerText = "Online"; 
-      return; 
-    } 
-    
-    if(!navigator.onLine) { 
-      if(statusEl) statusEl.innerText = "Offline"; 
-      return; 
-    } 
-    
-    isSyncing = true; 
-    if(statusEl) statusEl.innerText = "Syncing..."; 
+      if(statusEl) { statusEl.innerText = "Online"; statusEl.className = "badge bg-success extra-small"; }
+      return;
+    }
+
+    isSyncing = true;
+    if(statusEl) { statusEl.innerText = "Syncing..."; statusEl.className = "badge bg-warning extra-small"; }
     
     if (qKasir.length > 0) { 
       const dataYangDikirim = [...qKasir]; 
@@ -761,7 +918,7 @@ const clientTxnId = crypto.randomUUID
           refreshHistoryLogUI();
         } else {
           console.log("Sync ditolak server, item tetap di antrian untuk dicoba lagi:", res);
-          if (statusEl) statusEl.innerText = "Gagal Sync, akan dicoba lagi";
+          if (statusEl) { statusEl.innerText = "Gagal Sync, akan dicoba lagi"; statusEl.className = "badge bg-danger extra-small"; }
         }
       })
       .catch((err) => { 
@@ -815,13 +972,17 @@ const clientTxnId = crypto.randomUUID
     localStorage.setItem('sync_queue_opr', JSON.stringify([...queueOpr, { tgl: new Date().toLocaleString('id-ID'), jenisAktivitas: jenis, qty: qty, minyakUsed: parseFloat(document.getElementById('minyakAyam').value) || 0, keterangan: document.getElementById('ketAyam').value }])); 
     Swal.fire({ icon: 'success', title: 'Tercatat', timer: 1000, showConfirmButton: false }); 
     document.getElementById('qtyAyam').value = ''; document.getElementById('minyakAyam').value = ''; document.getElementById('ketAyam').value = ''; 
-    attemptSync(); setTimeout(loadStokAyam, 1500); 
+    attemptSync(); setTimeout(loadStokAyam, 1500); setTimeout(loadRingkasanDapurHariIni, 1500);
   }
 
   function hitungKembalian() { const metode = document.getElementById('metodeBayar').value; if (metode !== 'Cash') { document.getElementById('uangKembalian').innerText = "Metode: Non-Tunai"; return; } const uangBayar = parseInt(document.getElementById('uangBayar').value, 10) || 0; if (bypassModeActive) { document.getElementById('uangKembalian').innerText = "Bypass Aktif"; return; } const diskonInputVal = parseInt(document.getElementById('diskonNotaInput').value, 10) || 0; let nominalPotongan = (diskonTipe === 'Rp') ? diskonInputVal : Math.round(totalBelanjaGlobal * (diskonInputVal / 100)); const totalAkhirSetelahDiskon = Math.max(0, totalBelanjaGlobal - nominalPotongan); const kembalian = uangBayar - totalAkhirSetelahDiskon; document.getElementById('uangKembalian').innerText = kembalian >= 0 ? 'Kembali: Rp ' + kembalian.toLocaleString('id-ID') : 'Kurang: Rp ' + Math.abs(kembalian).toLocaleString('id-ID'); }
   function kirimRekapKeGSheet() { fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'rekapGsheet', payload: dataGlobalRekapKirim }) }).then(res=>res.json()).then(res=>{ Swal.fire('Berhasil!', res.hasil, 'success'); }); }
 
   window.addEventListener('online', attemptSync);
+  // PENTING: dengarkan juga event 'offline' supaya badge status langsung
+  // berubah SAAT ITU JUGA ketika koneksi putus, bukan menunggu sampai
+  // interval 20 detik berikutnya (lihat catatan di attemptSync()).
+  window.addEventListener('offline', attemptSync);
   setInterval(attemptSync, 20000);
   handleAktivitasDapurChange('Goreng Ayam');
   loadMenuDariSheets();

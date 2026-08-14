@@ -26,6 +26,7 @@
         <button class="mode-btn active" id="modeHarianBtn" onclick="ubahMode('harian')" role="tab" aria-selected="true">Harian</button>
         <button class="mode-btn" id="modeBulananBtn" onclick="ubahMode('bulanan')" role="tab" aria-selected="false">Bulanan</button>
         <button class="mode-btn" id="modeQrisBtn" onclick="ubahMode('qris')" role="tab" aria-selected="false">QRIS</button>
+        <button class="mode-btn" id="modeDapurBtn" onclick="ubahMode('dapur')" role="tab" aria-selected="false">Log Dapur</button>
       </div>
     </header>
 
@@ -100,6 +101,30 @@
         <div class="qris-total" id="qrisTotalLabel">Rp 0</div>
       </div>
       <div class="qris-list" id="listQris"></div>
+    </section>
+
+    <section class="panel panel-dapur" id="panelDapur" style="display:none;">
+      <div class="panel-head">
+        <h2>Ringkasan <span>Dapur</span></h2>
+      </div>
+      <div class="kpi-strip kpi-strip-dapur">
+        <div class="kpi-card">
+          <span class="kpi-label">Ayam Digoreng</span>
+          <div class="kpi-value" id="kpiDapurGoreng">0 pcs</div>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Ayam Terjual</span>
+          <div class="kpi-value" id="kpiDapurTerjual">0 pcs</div>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Pemakaian Minyak</span>
+          <div class="kpi-value" id="kpiDapurMinyak">0 L</div>
+        </div>
+      </div>
+      <div class="panel-head">
+        <h2>Riwayat Aktivitas <span id="dapurPeriodeLabel"></span></h2>
+      </div>
+      <div class="dapur-list" id="listDapur"></div>
     </section>
 
     <div class="dash-empty" id="emptyState" style="display:none;">

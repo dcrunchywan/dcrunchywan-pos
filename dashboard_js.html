@@ -61,17 +61,23 @@ function ubahMode(mode) {
   document.getElementById('modeBulananBtn').setAttribute('aria-selected', mode === 'bulanan');
   document.getElementById('modeQrisBtn').classList.toggle('active', mode === 'qris');
   document.getElementById('modeQrisBtn').setAttribute('aria-selected', mode === 'qris');
+  document.getElementById('modeDapurBtn').classList.toggle('active', mode === 'dapur');
+  document.getElementById('modeDapurBtn').setAttribute('aria-selected', mode === 'dapur');
 
+  const pakaiTanggal = (mode === 'qris' || mode === 'dapur');
   document.getElementById('pickerBulanWrap').style.display = (mode === 'harian') ? 'flex' : 'none';
-  document.getElementById('pickerTahunWrap').style.display = (mode === 'qris') ? 'none' : 'flex';
-  document.getElementById('pickerTanggalWrap').style.display = (mode === 'qris') ? 'flex' : 'none';
+  document.getElementById('pickerTahunWrap').style.display = pakaiTanggal ? 'none' : 'flex';
+  document.getElementById('pickerTanggalWrap').style.display = pakaiTanggal ? 'flex' : 'none';
 
-  const ringkasanTampil = (mode !== 'qris') ? '' : 'none';
+  const ringkasanTampil = (mode === 'harian' || mode === 'bulanan') ? '' : 'none';
   document.querySelector('.hero-register').style.display = ringkasanTampil;
-  document.querySelector('.kpi-strip').style.display = ringkasanTampil;
+  // .kpi-strip juga dipakai panel Dapur (kpi-strip-dapur) -- pilih strip
+  // ringkasan omzet secara spesifik lewat :not() supaya tidak ikut disembunyikan.
+  document.querySelector('.kpi-strip:not(.kpi-strip-dapur)').style.display = ringkasanTampil;
   document.querySelector('.panel-chart').style.display = ringkasanTampil;
   document.querySelector('.panel-nota').style.display = ringkasanTampil;
   document.getElementById('panelQris').style.display = (mode === 'qris') ? 'block' : 'none';
+  document.getElementById('panelDapur').style.display = (mode === 'dapur') ? 'block' : 'none';
 
   // PENTING: Chart.js menyimpan ukuran canvas saat dibuat/di-update. Kalau
   // canvas-nya sempat disembunyikan (display:none, seperti saat pindah ke
@@ -84,11 +90,15 @@ function ubahMode(mode) {
     chartInstance = null;
   }
 
-  document.getElementById('dashFooter').innerHTML = (mode === 'qris')
-    ? 'Sumber data: tab <strong>Transaksi</strong> &amp; <strong>Transaksi Mamah</strong> (gabungan, khusus QRIS)'
-    : 'Sumber data: tab <strong>Transaksi</strong> &middot; tidak termasuk Transaksi Mamah';
+  if (mode === 'qris') {
+    document.getElementById('dashFooter').innerHTML = 'Sumber data: tab <strong>Transaksi</strong> &amp; <strong>Transaksi Mamah</strong> (gabungan, khusus QRIS)';
+  } else if (mode === 'dapur') {
+    document.getElementById('dashFooter').innerHTML = 'Sumber data: tab <strong>Log_Stok_Ayam</strong> &amp; <strong>Transaksi</strong> (ayam terjual)';
+  } else {
+    document.getElementById('dashFooter').innerHTML = 'Sumber data: tab <strong>Transaksi</strong> &middot; tidak termasuk Transaksi Mamah';
+  }
 
-  if (mode !== 'qris') {
+  if (mode === 'harian' || mode === 'bulanan') {
     document.getElementById('grafikModeLabel').textContent = (mode === 'harian') ? 'Per Hari' : 'Per Bulan';
   }
   muatUlangData();
@@ -121,6 +131,21 @@ function muatUlangData() {
     };
     google.script.run.withSuccessHandler(onSuksesQris).withFailureHandler(onGagal)
       .ambilDaftarTransaksiQris(parseInt(bagian[2], 10), parseInt(bagian[1], 10), parseInt(bagian[0], 10));
+    return;
+  }
+
+  if (modeAktif === 'dapur') {
+    const tglInput = document.getElementById('selectTanggal').value; // format "yyyy-MM-dd"
+    if (!tglInput) { sedangMuat = false; btn.classList.remove('is-loading'); return; }
+    const bagian = tglInput.split('-'); // [yyyy, MM, dd]
+    const onSuksesDapur = (res) => {
+      sedangMuat = false;
+      btn.classList.remove('is-loading');
+      if (!res || res.status !== 'ok') { tampilkanError(); return; }
+      renderDapurList(res);
+    };
+    google.script.run.withSuccessHandler(onSuksesDapur).withFailureHandler(onGagal)
+      .ambilLogDapurHarian(parseInt(bagian[2], 10), parseInt(bagian[1], 10), parseInt(bagian[0], 10));
     return;
   }
 
@@ -275,6 +300,34 @@ function renderQrisList(res) {
       <span class="qris-leader"></span>
       <span class="qris-nilai">${formatRupiahDash(n.total)}</span>
       ${isVoid ? '<span class="qris-badge-void">VOID</span>' : ''}
+    `;
+    wrap.appendChild(row);
+  });
+}
+
+function renderDapurList(res) {
+  document.getElementById('kpiDapurGoreng').textContent = (res.ayamDigoreng || 0).toLocaleString('id-ID') + ' pcs';
+  document.getElementById('kpiDapurTerjual').textContent = (res.ayamTerjual || 0).toLocaleString('id-ID') + ' pcs';
+  document.getElementById('kpiDapurMinyak').textContent = (res.pemakaianMinyak || 0).toLocaleString('id-ID') + ' L';
+  document.getElementById('dapurPeriodeLabel').textContent = res.periodeLabel || '';
+
+  const wrap = document.getElementById('listDapur');
+  wrap.innerHTML = '';
+
+  if (!res.daftarAktivitas || res.daftarAktivitas.length === 0) {
+    wrap.innerHTML = '<div class="dapur-row is-empty"><span class="dapur-jenis">Belum ada aktivitas dapur tercatat.</span></div>';
+    return;
+  }
+
+  res.daftarAktivitas.forEach((a) => {
+    const negatif = a.jumlah < 0;
+    const row = document.createElement('div');
+    row.className = 'dapur-row';
+    row.innerHTML = `
+      <span class="dapur-jenis">${a.jenis}</span>
+      <span class="dapur-ket">${a.keterangan || ''}</span>
+      <span class="dapur-leader"></span>
+      <span class="dapur-jumlah ${negatif ? 'is-minus' : 'is-plus'}">${negatif ? '' : '+'}${a.jumlah.toLocaleString('id-ID')}</span>
     `;
     wrap.appendChild(row);
   });

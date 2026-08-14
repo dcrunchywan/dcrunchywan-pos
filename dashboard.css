@@ -379,6 +379,55 @@ html, body {
 .qris-row.is-void .qris-sumber { color: var(--text-dim); text-decoration: line-through; }
 .qris-row.is-void .qris-nilai { color: var(--text-dim); text-decoration: line-through; }
 
+/* ---------- Log Dapur (goreng ayam, ayam terjual, pemakaian minyak) ---------- */
+.kpi-strip-dapur { grid-template-columns: repeat(3, 1fr); margin-bottom: 22px; }
+
+.dapur-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+.dapur-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px dashed var(--line);
+}
+.dapur-row:last-child { border-bottom: none; }
+.dapur-jenis {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+.dapur-ket {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dapur-leader {
+  flex: 1;
+  border-bottom: 2px dotted var(--line);
+  height: 0;
+  margin-bottom: 4px;
+}
+.dapur-jumlah {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+.dapur-jumlah.is-plus { color: var(--mint); }
+.dapur-jumlah.is-minus { color: var(--rose); }
+.dapur-row.is-empty .dapur-jenis { color: var(--text-dim); font-weight: 400; white-space: normal; }
+
 /* ---------- Empty / error states ---------- */
 .dash-empty, .dash-error {
   text-align: center;
