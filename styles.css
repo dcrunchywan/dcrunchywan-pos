@@ -89,16 +89,18 @@
     .history-struk-block:last-child { border-bottom: none; }
     .history-struk-header { background: #f8f9fa; border-radius: 8px; padding: 6px 10px; font-size: 0.8rem; }
     .history-struk-item { font-size: 0.8rem; padding: 4px 10px 4px 26px; color: #495057; }
-    .cart-item-row { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 10px; }
-    .cart-item-name { flex-grow: 1; min-width: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; font-weight: bold; color: #2d3436; }
-    .cart-item-controls { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+    /* Title item baris sendiri, boleh wrap (tidak dipotong ellipsis lagi),
+       font dikecilkan sedikit supaya card tidak jadi terlalu tinggi. */
+    .cart-item-title { font-weight: bold; color: #2d3436; font-size: 0.76rem; line-height: 1.25; margin-bottom: 5px; white-space: normal; word-break: break-word; }
+    .cart-item-row { display: flex; align-items: center; width: 100%; gap: 8px; }
     .qty-control { max-width: 38px !important; font-weight: bold; text-align: center; padding: 2px !important; height: 28px !important; }
     .qty-stepper { display: flex; align-items: center; gap: 3px; }
     .qty-step-btn { width: 26px; height: 26px; flex-shrink: 0; border: 1px solid #dee2e6; background: #fff; border-radius: 6px; font-weight: 800; font-size: 1rem; line-height: 1; color: #495057; display: flex; align-items: center; justify-content: center; padding: 0; }
     .qty-step-btn:active { background: #e9ecef; }
-    /* Jarak ekstra dari tombol hapus supaya tidak ke-pencet tidak sengaja
-       saat menekan tombol +/- qty di sebelahnya. */
-    .cart-delete-btn { margin-left: 12px; }
+    /* ms-auto di markup yang mendorong tombol hapus ke ujung kanan baris --
+       menjaga jarak maksimal dari tombol +/- qty supaya tidak ke-pencet
+       tidak sengaja. */
+    .cart-delete-btn { flex-shrink: 0; }
 
     .popup-layout-container { display: flex; gap: 15px; align-items: stretch; }
     .popup-info-side { width: 45%; background: #ffffff; border-right: 1px solid #dee2e6; padding-right: 15px; display: flex; flex-direction: column; justify-content: center; }
