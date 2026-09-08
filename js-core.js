@@ -1,7 +1,7 @@
 // ⚠️ URL DEPLOYMENT API WEB APP GOOGLE APPS SCRIPT ANDA
-// SANDBOX untuk testing — production dipindah ke komentar agar mudah rollback
-// const API_URL = "https://script.google.com/macros/s/AKfycbw7o57RDEHgpuKdYWtysY_94vVEDhzAOu-b_EK0oUH0znTcWc3rr6S7Jj2E1NQgRpAV/exec";
-  const API_URL = "https://script.google.com/macros/s/AKfycbypT2X6wXw-yVZ4tkEPCOdhrG2IImWEZMx0XAH5oXi0Wrnc7jSMkye9njcVx8lkk3AF/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbw7o57RDEHgpuKdYWtysY_94vVEDhzAOu-b_EK0oUH0znTcWc3rr6S7Jj2E1NQgRpAV/exec";
+// SANDBOX untuk testing — dipindah ke komentar agar mudah rollback
+// const API_URL = "https://script.google.com/macros/s/AKfycbypT2X6wXw-yVZ4tkEPCOdhrG2IImWEZMx0XAH5oXi0Wrnc7jSMkye9njcVx8lkk3AF/exec";
 
 // Util format angka ke Rupiah, dipakai bersama oleh kasir & dashboard.
 // Contoh: formatRupiah(15000) -> "Rp 15.000"
