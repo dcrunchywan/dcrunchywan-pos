@@ -497,9 +497,11 @@ function renderDapurList(res) {
   });
 }
 
-// Wallet Kas Toko — global, tidak terfilter periode
+// Wallet Kas Toko — hormati filter month picker jika ada
 function fetchWallet(){
+  var m = document.getElementById('walletDashMonthPicker')?.value;
   var badge = document.getElementById('walletDashBadge');
+  if (m) { if(badge) badge.textContent='Memuat...'; var pm=m.split('-'); google.script.run.withSuccessHandler(function(r){ if(!r||r.status!=='ok'){ if(badge) badge.textContent='Gagal'; return; } renderWallet(r); if(badge) badge.textContent=r.periodeLabel||'Filter'; }).withFailureHandler(function(){ if(badge) badge.textContent='Gagal'; }).getWalletSaldoPeriode(parseInt(pm[1],10), parseInt(pm[0],10), null); return; }
   if(badge) badge.textContent = 'Memuat...';
   google.script.run.withSuccessHandler(function(r){
     if(!r || r.status!=='ok'){ if(badge) badge.textContent='Gagal'; return; }

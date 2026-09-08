@@ -1268,6 +1268,9 @@ const clientTxnId = crypto.randomUUID
     // also refresh rekap bisa disetor mirror if needed
   }
   function fetchWalletSaldo(){
+    // jika filter periode aktif, jangan timpa dengan global — polling harus hormati filter
+    var monthVal = document.getElementById('walletMonthPicker')?.value;
+    if (monthVal) { var pm = monthVal.split('-'); return fetchWalletSaldoPeriode(parseInt(pm[1],10), parseInt(pm[0],10), null); }
     var statusEl = document.getElementById('walletStatusBadge');
     if(statusEl){ statusEl.className='badge bg-secondary extra-small'; statusEl.innerHTML='<i class="fas fa-spinner fa-spin me-1"></i>Memuat...'; }
     fetch(API_URL + '?aksi=ambilWalletSaldo')
