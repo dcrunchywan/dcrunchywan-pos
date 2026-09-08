@@ -509,16 +509,12 @@ function fetchWallet(){
 function renderWallet(r){
   var fmt = function(v){ return 'Rp ' + Math.round(Number(v)||0).toLocaleString('id-ID'); };
   document.getElementById('walletSaldo').textContent = fmt(r.saldo);
-  // FIX #1: modal dari server (Laporan Tutup Toko hari ini, Asia/Jakarta),
-  // bukan localStorage cross-origin (script.google.com vs github.io) yang
-  // selalu 0 + toISOString UTC salah hari WIB.
   var modal = Number(r.modalLaci) || 0;
-  // compat: cache lama sebelum fix tidak ada modalLaci/bisaDisetor
-  if (r.modalLaci === undefined && r.bisaDisetor === undefined) {
-    modal = 0;
-  }
+  if (r.modalLaci === undefined && r.bisaDisetor === undefined) modal = 0;
   var bisa = (r.bisaDisetor !== undefined) ? Number(r.bisaDisetor) : Math.max(0, (Number(r.saldo)||0) - modal);
-  document.getElementById('walletModal').textContent = fmt(modal);
+  // card pertama ganti Modal Kembalian → Sudah Disetor
+  var bTmp = r.breakdown || {};
+  document.getElementById('walletModal').textContent = fmt(bTmp.setoranOwner || 0);
   document.getElementById('walletBisa').textContent = fmt(bisa);
   var b=r.breakdown||{};
   document.getElementById('walletSaldoAwal').textContent = fmt(b.saldoAwal);
@@ -531,6 +527,25 @@ function renderWallet(r){
   if(badge2) badge2.textContent = 'Terkini';
 }
 
+function onWalletDashPeriodeChange(){
+  var m = document.getElementById('walletDashMonthPicker')?.value; // YYYY-MM
+  var d = document.getElementById('walletDashDatePicker')?.value; // YYYY-MM-DD
+  var badge = document.getElementById('walletDashBadge'); if(badge) badge.textContent='Memuat...';
+  if (d) {
+    var p = d.split('-');
+    google.script.run.withSuccessHandler(function(r){ if(r && r.status==='ok'){ renderWallet(r); if(badge) badge.textContent=r.periodeLabel||'Filter'; } else if(badge) badge.textContent='Gagal'; }).withFailureHandler(function(){ if(badge) badge.textContent='Gagal'; }).getWalletSaldoPeriode(parseInt(p[1],10), parseInt(p[0],10), parseInt(p[2],10));
+  } else if (m) {
+    var pm = m.split('-');
+    google.script.run.withSuccessHandler(function(r){ if(r && r.status==='ok'){ renderWallet(r); if(badge) badge.textContent=r.periodeLabel||'Filter'; } else if(badge) badge.textContent='Gagal'; }).withFailureHandler(function(){ if(badge) badge.textContent='Gagal'; }).getWalletSaldoPeriode(parseInt(pm[1],10), parseInt(pm[0],10), null);
+  } else {
+    fetchWallet();
+  }
+}
+function clearWalletDashFilter(){
+  var m=document.getElementById('walletDashMonthPicker'); if(m) m.value='';
+  var d=document.getElementById('walletDashDatePicker'); if(d) d.value='';
+  fetchWallet();
+}
 // PENTING: pakai event 'load' (bukan 'DOMContentLoaded') supaya kita
 // menunggu SEMUA resource eksternal (termasuk script Chart.js dari CDN)
 // benar-benar selesai dimuat dulu sebelum render pertama. Di dalam sandbox

@@ -1223,14 +1223,21 @@ const clientTxnId = crypto.randomUUID
     } else {
       wrap.innerText = 'Rp ' + Number(saldoTampil||0).toLocaleString('id-ID');
     }
-    // Modal Kembalian & Bisa Disetor
+    // Sudah Disetor & Bisa Disetor (Modal tetap untuk hitung bisa, tapi card pertama ganti ke Sudah Disetor)
     var modal = getModalLaci(getLocalIsoDate());
-    // modal per hari, but wallet is global; use today's modal
     var bisaDisetor = Math.max(0, saldoTampil - (Number(modal)||0));
     var elBisa = document.getElementById('walletBisaDisetor');
     if(elBisa) elBisa.innerText = 'Rp ' + Number(bisaDisetor||0).toLocaleString('id-ID');
-    var elModal = document.getElementById('walletModalKembalian');
-    if(elModal) elModal.innerText = 'Rp ' + Number(modal||0).toLocaleString('id-ID');
+    var elSudah = document.getElementById('walletModalKembalian');
+    // el id tetap walletModalKembalian untuk compat, tapi label sudah "Sudah Disetor"
+    var sudahDisetorVal = (hasServer && serverCache.breakdown) ? Number(serverCache.breakdown.setoranOwner||0) : 0;
+    // jika filter periode aktif, akan di-override oleh renderWalletFiltered
+    if(elSudah) {
+      // simpan modal asli di dataset untuk kalkulasi bisaDisetor jika perlu
+      elSudah.dataset.modal = String(modal);
+      // default tampil Sudah Disetor global
+      elSudah.innerText = 'Rp ' + Number(sudahDisetorVal||0).toLocaleString('id-ID');
+    }
     // status badge
     if(statusEl){
       if(!hasServer && (JSON.parse(localStorage.getItem('sync_queue')||'[]').length>0 || JSON.parse(localStorage.getItem('sync_queue_belanja')||'[]').length>0)){
@@ -1280,6 +1287,65 @@ const clientTxnId = crypto.randomUUID
         // offline: use cache + pending
         renderWalletKasToko();
       });
+  }
+  function onWalletPeriodeChange(){
+    var monthVal = document.getElementById('walletMonthPicker')?.value; // YYYY-MM
+    var dateVal = document.getElementById('walletDatePicker')?.value; // YYYY-MM-DD
+    if (dateVal) {
+      var p = dateVal.split('-'); // YYYY-MM-DD
+      fetchWalletSaldoPeriode(parseInt(p[1],10), parseInt(p[0],10), parseInt(p[2],10));
+    } else if (monthVal) {
+      var pm = monthVal.split('-');
+      fetchWalletSaldoPeriode(parseInt(pm[1],10), parseInt(pm[0],10), null);
+    } else {
+      fetchWalletSaldo();
+    }
+  }
+  function clearWalletPeriodeFilter(){
+    var m = document.getElementById('walletMonthPicker'); if(m) m.value='';
+    var d = document.getElementById('walletDatePicker'); if(d) d.value='';
+    fetchWalletSaldo();
+  }
+  function fetchWalletSaldoPeriode(bulan, tahun, tanggal){
+    var statusEl = document.getElementById('walletStatusBadge');
+    if(statusEl){ statusEl.className='badge bg-secondary extra-small'; statusEl.innerHTML='<i class="fas fa-spinner fa-spin me-1"></i>Memuat...'; }
+    var url = API_URL + '?aksi=ambilWalletSaldoPeriode&bulan='+bulan+'&tahun='+tahun;
+    if(tanggal) url += '&tanggal='+tanggal;
+    fetch(url).then(function(res){ return res.json(); }).then(function(data){
+      if(data && data.status==='ok'){
+        // render filtered tanpa overwrite cache global
+        renderWalletFiltered(data);
+      } else throw new Error('res not ok');
+    }).catch(function(err){
+      if(statusEl){ statusEl.className='badge bg-danger extra-small'; statusEl.innerText='Gagal'; }
+    });
+  }
+  function renderWalletFiltered(r){
+    var wrap = document.getElementById('walletSaldoValue');
+    if(!wrap) return;
+    var fmt = function(v){ return 'Rp ' + Number(v||0).toLocaleString('id-ID'); };
+    wrap.innerText = fmt(r.saldo);
+    var elSudah = document.getElementById('walletModalKembalian');
+    if(elSudah) elSudah.innerText = fmt(r.breakdown ? r.breakdown.setoranOwner : r.saldo);
+    var elBisa = document.getElementById('walletBisaDisetor');
+    if(elBisa) elBisa.innerText = fmt(r.bisaDisetor);
+    var helper = document.getElementById('walletHelper');
+    if(helper) helper.innerText = r.periodeLabel ? ('Periode: ' + r.periodeLabel) : 'Uang toko yang masih dipegang dan belum disetor.';
+    var statusEl = document.getElementById('walletStatusBadge');
+    if(statusEl){ statusEl.className='badge bg-info extra-small'; statusEl.innerText = r.periodeLabel || 'Filter'; }
+    // rincian
+    if(r.breakdown){
+      var b=r.breakdown;
+      var set = function(id,val){ var el=document.getElementById(id); if(el) el.innerText=fmt(val); };
+      set('walletSaldoAwal', b.saldoAwal);
+      // walletModalKembalian sudah di-set sebagai Sudah Disetor
+      set('walletSetoran', b.setoranOwner);
+      // keep other breakdown for filtered
+      document.getElementById('walletCashAyam') && (document.getElementById('walletCashAyam').innerText = fmt(b.cashAyam));
+      document.getElementById('walletBelanja') && (document.getElementById('walletBelanja').innerText = fmt(b.belanja));
+      document.getElementById('walletTarik') && (document.getElementById('walletTarik').innerText = fmt(b.tarikTunai));
+      document.getElementById('walletAdjust') && (document.getElementById('walletAdjust').innerText = fmt(b.adjustment));
+    }
   }
   function requestSaldoAwalWallet(){
     if(!isOwnerAuthenticated) return Swal.fire('Akses Owner', 'Hanya owner boleh atur saldo awal.', 'warning');

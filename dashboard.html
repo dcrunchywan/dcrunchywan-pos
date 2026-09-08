@@ -65,8 +65,13 @@
         <div class="kpi-value" id="walletSaldo" style="font-size:1.8rem;letter-spacing:0.5px;">Rp 0</div>
         <span class="kpi-sub" id="walletSub">Uang toko yang dipegang &amp; belum disetor</span>
       </div>
+      <div class="d-flex gap-2 mb-2" style="flex-wrap:wrap;">
+        <input type="month" id="walletDashMonthPicker" class="form-control form-control-sm" style="max-width:150px;background:var(--panel);color:var(--text);border:1px solid var(--line);font-size:0.8rem;" onchange="onWalletDashPeriodeChange()">
+        <input type="date" id="walletDashDatePicker" class="form-control form-control-sm" style="max-width:150px;background:var(--panel);color:var(--text);border:1px solid var(--line);font-size:0.8rem;" onchange="onWalletDashPeriodeChange()">
+        <button class="btn btn-sm" style="background:var(--panel);border:1px solid var(--line);color:var(--text-dim);font-size:0.7rem;" onclick="clearWalletDashFilter()">Global</button>
+      </div>
       <div class="kpi-strip" style="grid-template-columns:1fr 1fr; margin:12px 0 0; gap:12px;">
-        <div class="kpi-card" style="border-top-color:var(--line)"><span class="kpi-label">Modal Kembalian</span><div class="kpi-value" id="walletModal" style="font-size:1.1rem">Rp 0</div></div>
+        <div class="kpi-card" style="border-top-color:var(--line)"><span class="kpi-label">Sudah Disetor</span><div class="kpi-value" id="walletModal" style="font-size:1.1rem">Rp 0</div></div>
         <div class="kpi-card kpi-positive"><span class="kpi-label">Uang yang Bisa Disetor</span><div class="kpi-value" id="walletBisa" style="font-size:1.1rem">Rp 0</div><span class="kpi-sub">max(0, Saldo − Modal)</span></div>
       </div>
       <details style="margin-top:14px;">
