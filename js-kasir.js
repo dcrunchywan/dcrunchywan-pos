@@ -1290,11 +1290,7 @@ const clientTxnId = crypto.randomUUID
   }
   function onWalletPeriodeChange(){
     var monthVal = document.getElementById('walletMonthPicker')?.value; // YYYY-MM
-    var dateVal = document.getElementById('walletDatePicker')?.value; // YYYY-MM-DD
-    if (dateVal) {
-      var p = dateVal.split('-'); // YYYY-MM-DD
-      fetchWalletSaldoPeriode(parseInt(p[1],10), parseInt(p[0],10), parseInt(p[2],10));
-    } else if (monthVal) {
+    if (monthVal) {
       var pm = monthVal.split('-');
       fetchWalletSaldoPeriode(parseInt(pm[1],10), parseInt(pm[0],10), null);
     } else {
@@ -1303,7 +1299,6 @@ const clientTxnId = crypto.randomUUID
   }
   function clearWalletPeriodeFilter(){
     var m = document.getElementById('walletMonthPicker'); if(m) m.value='';
-    var d = document.getElementById('walletDatePicker'); if(d) d.value='';
     fetchWalletSaldo();
   }
   function fetchWalletSaldoPeriode(bulan, tahun, tanggal){

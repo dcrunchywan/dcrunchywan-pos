@@ -529,12 +529,8 @@ function renderWallet(r){
 
 function onWalletDashPeriodeChange(){
   var m = document.getElementById('walletDashMonthPicker')?.value; // YYYY-MM
-  var d = document.getElementById('walletDashDatePicker')?.value; // YYYY-MM-DD
   var badge = document.getElementById('walletDashBadge'); if(badge) badge.textContent='Memuat...';
-  if (d) {
-    var p = d.split('-');
-    google.script.run.withSuccessHandler(function(r){ if(r && r.status==='ok'){ renderWallet(r); if(badge) badge.textContent=r.periodeLabel||'Filter'; } else if(badge) badge.textContent='Gagal'; }).withFailureHandler(function(){ if(badge) badge.textContent='Gagal'; }).getWalletSaldoPeriode(parseInt(p[1],10), parseInt(p[0],10), parseInt(p[2],10));
-  } else if (m) {
+  if (m) {
     var pm = m.split('-');
     google.script.run.withSuccessHandler(function(r){ if(r && r.status==='ok'){ renderWallet(r); if(badge) badge.textContent=r.periodeLabel||'Filter'; } else if(badge) badge.textContent='Gagal'; }).withFailureHandler(function(){ if(badge) badge.textContent='Gagal'; }).getWalletSaldoPeriode(parseInt(pm[1],10), parseInt(pm[0],10), null);
   } else {
@@ -543,7 +539,6 @@ function onWalletDashPeriodeChange(){
 }
 function clearWalletDashFilter(){
   var m=document.getElementById('walletDashMonthPicker'); if(m) m.value='';
-  var d=document.getElementById('walletDashDatePicker'); if(d) d.value='';
   fetchWallet();
 }
 // PENTING: pakai event 'load' (bukan 'DOMContentLoaded') supaya kita

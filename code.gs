@@ -997,7 +997,8 @@ function _totalPengeluaranPeriode(ss, filterFn) {
     var metode = row[5] ? row[5].toString().trim() : "";
     var isCash = (metode === "" || metode === "Cash Toko");
     var isBelanja = (jenis === "Belanja Operasional" || jenis === "Operasional");
-    if (isBelanja && isCash) total += nominal;
+    var isTarik = (jenis === "Tarik Tunai");
+    if ((isBelanja || isTarik) && isCash) total += nominal;
   });
   return total;
 }
