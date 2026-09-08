@@ -1,4 +1,4 @@
-  let menu = []; let cart = []; let isSyncing = false; let currentCategory1 = 'Semua'; let currentCategory2 = 'Semua'; let totalBelanjaGlobal = 0;
+  let menu = []; let cart = []; let isSyncing = false; let isSavingKas = false; let currentCategory1 = 'Semua'; let currentCategory2 = 'Semua'; let totalBelanjaGlobal = 0;
   let bypassModeActive = false; let isOwnerAuthenticated = false; let dataGlobalRekapKirim = {}; let dataOpnameLokalRaw = [];
   let diskonTipe = 'Rp'; let numpadBootstrapModalInstance = null;
 
@@ -1531,10 +1531,14 @@ const clientTxnId = crypto.randomUUID
     return parseInt((str || '').toString().replace(/[^0-9]/g, ''), 10) || 0;
   }
   function simpanKasOperasional() { 
+    if (isSavingKas) return;
+    isSavingKas = true;
+    const btn = document.querySelector('#panel-belanja button[onclick="simpanKasOperasional()"]');
+    if (btn) btn.disabled = true;
     const jenis = document.getElementById('jenisKas').value; 
     const nama = document.getElementById('namaItemKas') ? document.getElementById('namaItemKas').value : "Kas Toko"; 
     const nominal = parseNominalKas(document.getElementById('nominalKas').value); 
-    if (!nama || nominal <= 0) { Swal.fire('Peringatan', 'Lengkapi pengeluaran!', 'warning'); return; } 
+    if (!nama || nominal <= 0) { Swal.fire('Peringatan', 'Lengkapi pengeluaran!', 'warning'); if (btn) btn.disabled = false; isSavingKas = false; return; } 
     const clientTxnId = crypto.randomUUID ? crypto.randomUUID() : (Date.now() + "-" + Math.random().toString(36).substr(2,8));
     var metodeKas = (document.getElementById('metodeKas')?.value || 'Cash Toko');
     if(jenis!=='Belanja Operasional' && jenis!=='Operasional') metodeKas = 'Cash Toko';
@@ -1547,7 +1551,8 @@ const clientTxnId = crypto.randomUUID
     hitungRekapHarian();
     refreshHistoryLogUI();
     try{ renderWalletKasToko(); }catch(e){}
-    attemptSync(); 
+    attemptSync();
+    setTimeout(function(){ if (btn) btn.disabled = false; isSavingKas = false; }, 1200);
   }
 
   function clearRekapHarian() { Swal.fire({ title: 'Hapus Sesi?', icon: 'warning', showCancelButton: true }).then((r) => { if (r.isConfirmed) { localStorage.removeItem('rekap_hari_ini'); document.getElementById('modalAwalInput').value = 0; hitungRekapHarian(); Swal.fire('Cleared!', '', 'success'); } }); }
