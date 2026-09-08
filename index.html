@@ -40,7 +40,7 @@
       <button class="btn btn-sm btn-warning fw-bold update-available-btn mt-1" style="display:none; font-size: 0.6rem; padding: 3px 8px;" title="Ada versi baru tersedia"><i class="fas fa-arrow-up me-1"></i>Update</button>
     </div>
     <button class="nav-link active" id="kasir-tab-btn" data-bs-toggle="pill" data-bs-target="#panel-kasir" type="button" onclick="closeMobileSidebar()"><i class="fas fa-cash-register"></i>Kasir</button>
-    <button class="nav-link" id="stok-tab-btn" data-bs-toggle="pill" data-bs-target="#panel-stok" type="button" onclick="loadStokAyam(); loadRingkasanDapurHariIni(); closeMobileSidebar();"><i class="fas fa-drumstick-bite"></i>Dapur</button>
+    <button class="nav-link" id="stok-tab-btn" data-bs-toggle="pill" data-bs-target="#panel-stok" type="button" onclick="loadStokAyam(); loadRingkasanDapurHariIni(); loadLogDapurKasir(); closeMobileSidebar();"><i class="fas fa-drumstick-bite"></i>Dapur</button>
     <button class="nav-link" id="saset-tab-btn" data-bs-toggle="pill" data-bs-target="#panel-saset" type="button" onclick="loadStokBarang(); closeMobileSidebar();"><i class="fas fa-coffee"></i>Stok</button>
     <button class="nav-link" id="belanja-tab-btn" data-bs-toggle="pill" data-bs-target="#panel-belanja" type="button" onclick="closeMobileSidebar()"><i class="fas fa-wallet"></i>Kas</button>
     <button class="nav-link" id="history-tab-btn" data-bs-toggle="pill" data-bs-target="#panel-history" type="button" onclick="refreshHistoryLogUI(); closeMobileSidebar();"><i class="fas fa-history"></i>Riwayat</button>
@@ -266,6 +266,23 @@
             <div class="text-center"><h2 class="fw-bold text-warning m-0" id="liveStokMinyak">0 L</h2><p class="extra-small text-light fw-bold m-0">Sisa Minyak Goreng (Gudang)</p></div>
           </div>
         </div>
+        <!-- RIWAYAT AKTIVITAS DAPUR - REALTIME MONITORING (di bawah form input) -->
+        <div class="col-12">
+          <div class="card p-3 border-0 shadow-sm rounded-3 mx-auto" style="max-width: 700px;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="fw-bold m-0 text-dark small"><i class="fas fa-list-ul text-secondary me-2"></i>Riwayat Aktivitas <span id="kasirLogPeriodeLabel">Hari Ini</span></h6>
+              <span id="kasirLogStatusBadge" class="badge rounded-pill bg-secondary extra-small"><i class="fas fa-spinner fa-spin me-1"></i>Memuat...</span>
+            </div>
+            <!-- Owner-only date picker untuk histori tanggal lain -->
+            <div id="kasirLogOwnerPickerWrap" class="mb-2" style="display:none;">
+              <label class="form-label extra-small fw-bold text-muted mb-1">Pilih Tanggal (Owner)</label>
+              <input type="date" id="kasirLogTanggalPicker" class="form-control form-control-sm" onchange="loadLogDapurKasir()">
+            </div>
+            <div id="kasirLogDapurContainer" style="max-height: 320px; overflow-y: auto;">
+              <div class="text-center text-muted py-3 extra-small">Belum ada aktivitas hari ini.</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -294,10 +311,21 @@
 
       <div class="card p-3 border-0 shadow-sm rounded-3 mx-auto border border-warning" id="ownerApprovalSection" style="max-width: 700px; display:none !important;">
         <h6 class="fw-bold mb-2 text-warning"><i class="fas fa-user-shield me-2"></i>Persetujuan Draft Opname (Owner Mode)</h6>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="form-check m-0">
+            <input class="form-check-input" type="checkbox" id="checkAllDraft" onchange="toggleSelectAllDraft(this.checked)">
+            <label class="form-check-label extra-small fw-bold" for="checkAllDraft">Pilih Semua</label>
+          </div>
+          <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-success fw-bold" onclick="approveBulkSelected()" style="font-size:0.7rem;"><i class="fas fa-check-double me-1"></i>Approve Terpilih</button>
+            <button class="btn btn-sm btn-warning fw-bold" onclick="approveAllDrafts()" style="font-size:0.7rem;"><i class="fas fa-check me-1"></i>Approve All</button>
+          </div>
+        </div>
         <div class="table-responsive">
           <table class="table table-sm table-bordered extra-small text-center align-middle bg-white m-0">
             <thead class="table-dark">
               <tr>
+                <th style="width:32px;"><input type="checkbox" id="checkAllDraftHead" onchange="toggleSelectAllDraft(this.checked)"></th>
                 <th>Nama Barang</th>
                 <th>Sistem</th>
                 <th>Fisik Kasir</th>
@@ -306,7 +334,7 @@
               </tr>
             </thead>
             <tbody id="ownerApprovalTableBody">
-              <tr><td colspan="5" class="text-muted py-2">Tidak ada draft opname tertunda.</td></tr>
+              <tr><td colspan="6" class="text-muted py-2">Tidak ada draft opname tertunda.</td></tr>
             </tbody>
           </table>
         </div>
@@ -323,9 +351,34 @@
     <div class="tab-pane fade" id="panel-belanja">
       <div class="card p-3 border-0 shadow-sm rounded-3 mx-auto" style="max-width: 450px;">
         <h6 class="fw-bold mb-2 text-success"><i class="fas fa-wallet me-2"></i>Pengeluaran & Kas Toko</h6>
-        <div class="mb-2"><label class="form-label extra-small fw-bold">Jenis Keperluan</label><select id="jenisKas" class="form-select form-select-sm" onchange="toggleCustomInputLabel()"><option value="Belanja Operasional">Belanja Toko</option><option value="Tarik Tunai">Tarik Tunai</option></select></div>
+        <div class="mb-2"><label class="form-label extra-small fw-bold">Jenis Keperluan</label>
+          <div class="kas-chip-grid" id="jenisKasChipGrid">
+            <button type="button" class="kas-chip-btn active" data-jenis="Belanja Operasional" onclick="pilihJenisKas('Belanja Operasional')"><i class="fas fa-shopping-basket me-1"></i>Belanja</button>
+            <button type="button" class="kas-chip-btn" data-jenis="Operasional" onclick="pilihJenisKas('Operasional')"><i class="fas fa-tools me-1"></i>Operasional</button>
+            <button type="button" class="kas-chip-btn" data-jenis="Tarik Tunai" onclick="pilihJenisKas('Tarik Tunai')"><i class="fas fa-money-bill-transfer me-1"></i>Tarik Tunai</button>
+            <button type="button" class="kas-chip-btn" data-jenis="Setoran Owner" onclick="pilihJenisKas('Setoran Owner')"><i class="fas fa-hand-holding-dollar me-1"></i>Setoran</button>
+          </div>
+          <select id="jenisKas" style="display:none;" onchange="toggleCustomInputLabel()">
+            <option value="Belanja Operasional">Belanja Toko</option>
+            <option value="Operasional">Operasional</option>
+            <option value="Tarik Tunai">Tarik Tunai</option>
+            <option value="Setoran Owner">Setoran Owner</option>
+          </select>
+        </div>
+        <div class="mb-2" id="metodeKasWrap" style="display:none;">
+          <label class="form-label extra-small fw-bold">Metode Pembayaran</label>
+          <div class="metode-bayar-grid" style="grid-template-columns:1fr 1fr; gap:6px;">
+            <button type="button" class="metode-bayar-btn active" data-metodekas="Cash Toko" onclick="pilihMetodeKas('Cash Toko')">Cash Toko</button>
+            <button type="button" class="metode-bayar-btn" data-metodekas="Non-Cash" onclick="pilihMetodeKas('Non-Cash')">Non-Cash</button>
+          </div>
+          <select id="metodeKas" style="display:none;">
+            <option value="Cash Toko">Cash Toko</option>
+            <option value="Non-Cash">Non-Cash</option>
+          </select>
+          <small class="text-muted d-block mt-1" style="font-size:0.6rem;">Non-Cash tidak mengurangi Wallet Kas Toko.</small>
+        </div>
         <div class="mb-2"><label class="form-label extra-small fw-bold" id="labelNamaItem">Nama Barang</label><input type="text" id="namaItemKas" class="form-control form-control-sm" placeholder="Gas Melon / Beras"></div>
-        <div class="mb-2"><label class="form-label extra-small fw-bold">Nominal Uang (Rp)</label><input type="number" id="nominalKas" class="form-control form-control-sm" placeholder="0"></div>
+        <div class="mb-2"><label class="form-label extra-small fw-bold">Nominal Uang (Rp)</label><input type="text" inputmode="numeric" pattern="[0-9.]*" id="nominalKas" class="form-control form-control-sm" placeholder="0" oninput="formatNominalKas(this)"></div>
         <div class="mb-2"><label class="form-label extra-small fw-bold">Keterangan</label><input type="text" id="ketKas" class="form-control form-control-sm" placeholder="Opsional"></div>
         <button onclick="simpanKasOperasional()" class="btn btn-sm btn-success w-100 fw-bold py-2">CATAT PENGELUARAN</button>
       </div>
@@ -344,33 +397,140 @@
       </div>
     </div>
 
-    <!-- 7. PANEL LAPORAN REKAP TUTUP TOKO -->
-    <div class="tab-pane fade" id="panel-rekap">
-      <div class="card p-3 mx-auto" style="max-width: 500px; border-radius:12px;">
-        <h5 class="fw-bold mb-1 text-center text-dark"><i class="fas fa-store-slash text-danger me-2"></i>Laporan Kas Kasir (Tutup Toko)</h5>
-        <p class="text-muted text-center extra-small mb-2" id="rekapTanggal"></p>
-        <div class="row g-1 my-2 p-2 bg-light rounded border extra-small">
-          <div class="col-7"><label class="fw-bold text-muted d-block">Pilih Hari:</label><input type="date" id="rekapDatePicker" class="form-control form-control-sm" onchange="hitungRekapHarian()"></div>
-          <div class="col-5"><label class="fw-bold text-muted d-block">Modal Laci (Rp):</label><input type="number" id="modalAwalInput" class="form-control form-control-sm" value="0" oninput="hitungRekapHarian()"></div>
+     <!-- 7. PANEL LAPORAN REKAP TUTUP TOKO — UI POLISH SIMPLIFY + WALLET KAS TOKO -->
+     <div class="tab-pane fade" id="panel-rekap">
+      <div class="card p-4 mx-auto rekap-polish" style="max-width: 520px; border-radius:20px;">
+        <div class="d-flex align-items-center gap-3 mb-1">
+          <div class="d-flex align-items-center justify-content-center" style="width:40px;height:40px;border-radius:10px;background:#eff6ff;color:#2563eb;"><i class="fas fa-store"></i></div>
+          <div>
+            <h5 class="fw-bold text-dark m-0" style="font-size:1.05rem;letter-spacing:-0.02em;">Laporan Kas — Tutup Toko</h5>
+            <p class="text-muted extra-small m-0" id="rekapTanggal" style="font-size:0.7rem;"></p>
+          </div>
         </div>
-        <div class="bg-light p-2 rounded-3 mb-1 small border border-primary">
-          <span class="fw-bold text-primary text-uppercase extra-small d-block mb-1">1. Sektor D'CrunchyWan (Ayam Anda)</span>
-          <div class="d-flex justify-content-between ps-2 text-muted extra-small mb-1"><span>- Cash J Jualan Ayam:</span><span class="fw-bold text-dark" id="rekapCashAyam">Rp 0</span></div>
-          <div class="d-flex justify-content-between ps-2 text-muted extra-small"><span>- QRIS/Ojol Ayam:</span><span class="fw-bold text-dark" id="rekapQrisAyam">Rp 0</span></div>
+
+        <!-- WALLET KAS TOKO — Saldo berjalan milik toko, SOT server -->
+        <div class="card wallet-kas-card p-3 mb-3" id="walletKasCard">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="d-flex align-items-center gap-2">
+              <div class="d-flex align-items-center justify-content-center" style="width:28px;height:28px;border-radius:8px;background:#dbeafe;color:#2563eb;"><i class="fas fa-wallet" style="font-size:0.8rem;"></i></div>
+              <div>
+                <h6 class="fw-bold m-0 text-dark" style="font-size:0.8rem;letter-spacing:-0.01em;">KAS TOKO <span style="font-weight:400;color:#64748b;font-size:0.68rem;">Wallet Kas Toko</span></h6>
+              </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span id="walletStatusBadge" class="badge rounded-pill d-inline-flex align-items-center gap-1" style="background:#16a34a;color:#ffffff;border:1px solid #16a34a;font-size:0.62rem;padding:3px 8px;font-weight:700;letter-spacing:0.02em;"><i class="fas fa-check" style="font-size:0.55rem;color:#ffffff;"></i>Terkini</span>
+              <button class="btn d-flex align-items-center justify-content-center" onclick="fetchWalletSaldo()" title="Refresh saldo server" style="width:28px;height:28px;border-radius:8px;background:#fff;border:1px solid #e2e8f0;color:#3b82f6;"><i class="fas fa-rotate" style="font-size:0.7rem;"></i></button>
+            </div>
+          </div>
+          <div class="text-center mb-3">
+            <small class="text-muted d-block mb-1" style="font-size:0.65rem;letter-spacing:0.04em;font-weight:600;color:#64748b;">Saldo Kas Toko</small>
+            <h2 class="fw-bold m-0" id="walletSaldoValue" style="font-size:1.75rem;letter-spacing:-0.03em;color:#0f172a;line-height:1;">Rp 0</h2>
+            <small id="walletHelper" class="d-block mt-1" style="font-size:0.68rem;color:#64748b;">Uang toko yang masih dipegang dan belum disetor.</small>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <div class="d-flex gap-2 align-items-center p-2" style="background:#f8fafc;border:1px solid #f1f5f9;border-radius:10px;">
+                <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:28px;height:28px;border-radius:7px;background:#eff6ff;color:#3b82f6;"><i class="fas fa-coins" style="font-size:0.8rem;"></i></div>
+                <div>
+                  <small class="d-block" style="font-size:0.6rem;letter-spacing:0.04em;font-weight:700;color:#64748b;text-transform:uppercase;line-height:1;">Modal Kembalian</small>
+                  <div class="fw-bold" id="walletModalKembalian" style="font-size:0.85rem;color:#0f172a;margin-top:1px;">Rp 0</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="d-flex gap-2 align-items-center p-2" style="background:#f0fdf4;border:1px solid #dcfce7;border-radius:10px;">
+                <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:28px;height:28px;border-radius:7px;background:#dcfce7;color:#16a34a;"><i class="fas fa-arrow-up" style="font-size:0.8rem;"></i></div>
+                <div>
+                  <small class="d-block" style="font-size:0.6rem;letter-spacing:0.04em;font-weight:700;color:#64748b;text-transform:uppercase;line-height:1;">Yang bisa di Setor</small>
+                  <div class="fw-bold" id="walletBisaDisetor" style="font-size:0.85rem;color:#15803d;margin-top:1px;">Rp 0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="btn w-100 fw-bold d-flex align-items-center justify-content-center gap-2" onclick="requestSetorWallet()" style="background:#0f172a;color:#fff;border:none;border-radius:12px;padding:12px;font-size:0.9rem;letter-spacing:0.01em;"><i class="fas fa-hand-holding-dollar"></i>SETOR KE OWNER</button>
+          <div id="walletOwnerControls" style="display:none;" class="border-top pt-2 mt-2">
+            <small class="text-warning fw-bold extra-small d-block mb-1"><i class="fas fa-user-shield me-1"></i>Owner</small>
+            <div class="d-grid gap-1">
+              <button class="btn btn-sm btn-outline-warning fw-bold" onclick="requestSaldoAwalWallet()">Saldo Awal Wallet</button>
+              <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="requestAdjustmentWallet()">Adjust Saldo (+/-)</button>
+            </div>
+            <small id="walletPenyesuaianInfo" class="text-muted d-block mt-1" style="font-size:0.6rem;">Adjustment tercatat sebagai transaksi Pengeluaran & mempengaruhi wallet.</small>
+          </div>
         </div>
-        <div class="p-2 rounded-3 mb-1 small border" style="background-color: #ebf5fb; border-color: #3498db !important;">
-          <span class="fw-bold text-info text-uppercase extra-small d-block mb-1">2. Sektor Produk Mamah (Uang Dipisah)</span>
-          <div class="d-flex justify-content-between ps-2 text-muted extra-small mb-1"><span>- Cash J jualan Mamah:</span><span class="fw-bold text-dark" id="rekapCashMamah">Rp 0</span></div>
-          <div class="d-flex justify-content-between ps-2 text-muted extra-small"><span>- QRIS/Ojol Mamah:</span><span class="fw-bold text-dark" id="rekapQrisMamah">Rp 0</span></div>
+
+        <!-- Tanggal + Uang TOTAL Toko + Modal Kembalian -->
+        <div class="rekap-inputs mb-3">
+          <div class="row g-2">
+            <div class="col-6"><label class="form-label extra-small fw-bold text-muted">Tanggal</label><input type="date" id="rekapDatePicker" class="form-control form-control-sm" onchange="onRekapTanggalGanti()"></div>
+            <div class="col-6"><label class="form-label extra-small fw-bold text-muted">Modal Kembalian (Rp)</label><input type="text" inputmode="numeric" id="modalAwalInput" class="form-control form-control-sm" value="0" oninput="onModalLaciInput(this)"><small class="text-muted" style="font-size:0.58rem;">Uang yang harus tetap tersedia untuk kembalian.</small></div>
+            <div class="col-12"><label class="form-label extra-small fw-bold text-muted">Total Uang Buka Toko (Rp)</label><input type="text" inputmode="numeric" id="cashAwalHariInput" class="form-control form-control-sm fw-bold" value="" placeholder="0" oninput="onCashAwalHariInput(this)"><small class="text-muted" style="font-size:0.58rem;">Uang fisik yang dihitung sebelum toko buka.</small></div>
+          </div>
         </div>
-        <div class="d-flex justify-content-between mb-1 text-danger extra-small"><span>Total Belanja Toko (-):</span><span id="rekapBelanja">Rp 0</span></div>
-        <div class="d-flex justify-content-between mb-1 text-purple extra-small"><span>Total Tarik Tunai (-):</span><span id="rekapTarikTunai">Rp 0</span></div>
-        <div class="p-3 bg-dark text-white rounded-3 mb-2 d-flex justify-content-between align-items-center">
-          <div><h6 class="m-0 fw-bold text-warning small">CASH WAJIB DI LACI:</h6><small class="text-white-50 extra-small">(Modal + Cash Ayam - Pengeluaran)</small></div>
-          <h4 class="m-0 fw-bold text-warning" id="rekapWajibCash">Rp 0</h4>
+
+        <div id="rekapEmptyState" class="text-center py-3 mb-3 rounded" style="display:none; background:#f8f9fa; border:1px dashed #dee2e6;">
+          <div class="text-muted extra-small">Belum ada data untuk tanggal ini.</div>
+          <small class="text-muted" style="font-size:0.65rem;">Isi Total Uang Buka Toko atau tunggu transaksi hari ini.</small>
         </div>
-        <button onclick="rekapCheckWasteReminder()" class="btn btn-sm btn-danger w-100 fw-bold mb-1 py-2 shadow-sm"><i class="fas fa-cloud-upload-alt me-2"></i>KIRIM LAPORAN KE GSHEET</button>
-        <button onclick="clearRekapHarian()" class="btn btn-sm btn-outline-secondary w-100 mt-1 extra-small">Reset Data Lokal Sesi Ini</button>
+
+        <!-- 1. PENJUALAN HARI INI -->
+        <div class="rekap-section mb-3">
+          <h6 class="rekap-section-title">PENJUALAN HARI INI</h6>
+          <div class="rekap-group">
+            <div class="rekap-subtitle">AYAM</div>
+            <div class="rekap-row"><span class="rekap-label">Tunai</span><span class="rekap-value" id="rekapCashAyam">Rp 0</span></div>
+            <div class="rekap-row"><span class="rekap-label">QRIS / Ojol</span><span class="rekap-value" id="rekapQrisAyam">Rp 0</span></div>
+          </div>
+          <div class="rekap-group mt-2">
+            <div class="rekap-subtitle">PRODUK MAMAH — UANG DIPISAH</div>
+            <div class="rekap-row"><span class="rekap-label">Tunai</span><span class="rekap-value" id="rekapCashMamah">Rp 0</span></div>
+            <div class="rekap-row"><span class="rekap-label">QRIS / Ojol</span><span class="rekap-value" id="rekapQrisMamah">Rp 0</span></div>
+          </div>
+        </div>
+
+        <!-- 2. UANG KELUAR -->
+        <div class="rekap-section mb-3">
+          <h6 class="rekap-section-title">UANG KELUAR</h6>
+          <div class="rekap-row"><span class="rekap-label">Belanja</span><span class="rekap-value text-danger" id="rekapBelanja">Rp 0</span></div>
+          <div class="rekap-row"><span class="rekap-label">Tarik Tunai</span><span class="rekap-value text-purple" id="rekapTarikTunai">Rp 0</span></div>
+          <div class="rekap-row"><span class="rekap-label">Setor ke Owner</span><span class="rekap-value text-primary" id="rekapSetoranOwner">Rp 0</span></div>
+        </div>
+
+        <!-- 3. KARTU UTAMA — KAS TOKO HARI INI (BLIND — hidden sampai submit) -->
+        <div class="rekap-hero mb-3" id="rekapHeroWrap">
+          <div class="rekap-hero-head">Kas Toko Hari Ini</div>
+          <div class="rekap-hero-caption">Total uang tunai toko menurut sistem</div>
+          <div class="rekap-hero-value" id="rekapWajibCash">Rp 0</div>
+          <div class="rekap-hero-breakdown" id="rekapHeroBreakdown" style="display:none;">
+            <div class="rekap-hero-line"><span>Uang yang Bisa Disetor</span><span id="rekapTargetSetoran">Rp 0</span></div>
+            <div class="rekap-hero-line"><span>Sudah Disetor</span><span id="rekapSudahSetor">Rp 0</span></div>
+            <div class="rekap-hero-line is-highlight"><span>Belum Disetor</span><span id="rekapBelumDisetor">Rp 0</span></div>
+          </div>
+          <small class="text-white-50 d-block mt-2" style="font-size:0.6rem; opacity:0.7; display:none;">Belum disetor = uang toko yang masih tersimpan.</small>
+          <div id="rekapBlindHelperHero" class="rekap-blind-helper" style="display:none;"><i class="fas fa-lock me-1"></i>Hitung uang fisik terlebih dahulu. Hasil sistem akan muncul setelah disimpan.</div>
+          <!-- hidden keep IDs for logic -->
+          <span id="rekapCashFisik" style="display:none;">Rp 0</span>
+          <span id="rekapSisaCash" style="display:none;">Rp 0</span>
+        </div>
+
+        <!-- 5. CEK UANG FISIK -->
+        <div class="rekap-section rekap-check mb-3" id="rekapCheckWrap">
+          <h6 class="rekap-section-title">CEK UANG DI LACI</h6>
+          <div class="rekap-row rekap-row-muted" id="rekapCheckTeoritisRow"><span class="rekap-label">Uang Sistem</span><span class="rekap-value fw-bold" id="rekapCheckTeoritis">Rp 0</span></div>
+          <label class="form-label extra-small fw-bold mt-2">Uang Fisik (Rp)</label>
+          <input type="text" inputmode="numeric" id="cashRealInput" class="form-control form-control-sm fw-bold" placeholder="Kosong = belum dicek" oninput="onCashRealInput(this)">
+          <small class="text-muted d-block mt-1" style="font-size:0.6rem;">Hitung saat <b>Tutup Toko</b>.</small>
+          <label class="form-label extra-small fw-bold mt-2">Catatan (opsional)</label>
+          <input type="text" id="keteranganSelisihInput" class="form-control form-control-sm" placeholder="Contoh: Uang kecil tidak tercatat / Belum ditemukan">
+          <div class="rekap-selisih mt-2" id="rekapSelisihBox">
+            <div class="rekap-selisih-left"><span class="rekap-label">Selisih</span><span class="rekap-value ms-1" id="rekapSelisih">—</span></div>
+            <span class="badge" id="rekapStatus">BELUM DICEK</span>
+          </div>
+          <div id="rekapBlindHelperCheck" class="rekap-blind-helper rekap-blind-helper--light" style="display:none;"><i class="fas fa-eye-slash me-1"></i>Selisih & status akan tampil setelah Tutup Toko disimpan.</div>
+        </div>
+
+        <button onclick="simpanTutupToko()" class="btn btn-dark w-100 fw-bold mb-2 py-2"><i class="fas fa-lock me-1"></i>SIMPAN TUTUP TOKO</button>
+        <button onclick="rekapCheckWasteReminder()" class="btn btn-outline-danger w-100 fw-bold mb-2 py-2" style="font-size:0.8rem;"><i class="fas fa-cloud-upload-alt me-1"></i>Kirim Laporan ke GSheet</button>
+        <button onclick="clearRekapHarian()" class="btn btn-sm btn-outline-secondary w-100 extra-small">Reset Data Lokal Sesi Ini</button>
       </div>
     </div>
 

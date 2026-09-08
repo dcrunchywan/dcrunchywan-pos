@@ -209,7 +209,7 @@ html, body {
 /* ---------- KPI strip ---------- */
 .kpi-strip {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 12px;
   margin-bottom: 22px;
 }
@@ -427,6 +427,11 @@ html, body {
 .dapur-jumlah.is-plus { color: var(--mint); }
 .dapur-jumlah.is-minus { color: var(--rose); }
 .dapur-row.is-empty .dapur-jenis { color: var(--text-dim); font-weight: 400; white-space: normal; }
+
+/* ---------- Wallet panel ---------- */
+.panel-wallet .wallet-hero .kpi-value { color: var(--ember-glow); text-shadow: 0 0 12px rgba(230,126,34,0.35); }
+.panel-wallet details summary::-webkit-details-marker { display:none; }
+.panel-wallet details[open] summary { color: var(--text); }
 
 /* ---------- Empty / error states ---------- */
 .dash-empty, .dash-error {

@@ -50,6 +50,17 @@ function inisialisasiPicker() {
   const mmIso = String(bulanIni).padStart(2, '0');
   selectTanggal.value = tahunIni + '-' + mmIso + '-' + dd;
   selectTanggal.addEventListener('change', muatUlangData);
+
+  // Tanggal untuk tab Harian per tanggal
+  const selectHarianTanggal = document.getElementById('selectHarianTanggal');
+  if(selectHarianTanggal){
+    selectHarianTanggal.value = tahunIni + '-' + mmIso + '-' + dd;
+    selectHarianTanggal.addEventListener('change', muatUlangData);
+  }
+  // FOUC: default mode harian → bulan/tahun hidden, tanggal harian visible
+  var _pb = document.getElementById('pickerBulanWrap'); if(_pb) _pb.style.display='none';
+  var _pt = document.getElementById('pickerTahunWrap'); if(_pt) _pt.style.display='none';
+  var _ph = document.getElementById('pickerHarianTanggalWrap'); if(_ph) _ph.style.display='flex';
 }
 
 function ubahMode(mode) {
@@ -61,13 +72,18 @@ function ubahMode(mode) {
   document.getElementById('modeBulananBtn').setAttribute('aria-selected', mode === 'bulanan');
   document.getElementById('modeQrisBtn').classList.toggle('active', mode === 'qris');
   document.getElementById('modeQrisBtn').setAttribute('aria-selected', mode === 'qris');
+  var shopeeBtn=document.getElementById('modeShopeeBtn'); if(shopeeBtn){ shopeeBtn.classList.toggle('active', mode==='shopee'); shopeeBtn.setAttribute('aria-selected', mode==='shopee'); }
+  var grabBtn=document.getElementById('modeGrabBtn'); if(grabBtn){ grabBtn.classList.toggle('active', mode==='grab'); grabBtn.setAttribute('aria-selected', mode==='grab'); }
+  var gofoodBtn=document.getElementById('modeGofoodBtn'); if(gofoodBtn){ gofoodBtn.classList.toggle('active', mode==='gofood'); gofoodBtn.setAttribute('aria-selected', mode==='gofood'); }
   document.getElementById('modeDapurBtn').classList.toggle('active', mode === 'dapur');
   document.getElementById('modeDapurBtn').setAttribute('aria-selected', mode === 'dapur');
 
-  const pakaiTanggal = (mode === 'qris' || mode === 'dapur');
-  document.getElementById('pickerBulanWrap').style.display = (mode === 'harian') ? 'flex' : 'none';
-  document.getElementById('pickerTahunWrap').style.display = pakaiTanggal ? 'none' : 'flex';
-  document.getElementById('pickerTanggalWrap').style.display = pakaiTanggal ? 'flex' : 'none';
+  var isOjol = (mode==='qris'||mode==='shopee'||mode==='grab'||mode==='gofood');
+  document.getElementById('pickerBulanWrap').style.display = (mode === 'bulanan') ? 'flex' : 'none';
+  document.getElementById('pickerTahunWrap').style.display = (mode === 'bulanan') ? 'flex' : 'none';
+  document.getElementById('pickerTanggalWrap').style.display = (isOjol || mode === 'dapur') ? 'flex' : 'none';
+  var harianWrap = document.getElementById('pickerHarianTanggalWrap');
+  if(harianWrap) harianWrap.style.display = (mode === 'harian') ? 'flex' : 'none';
 
   const ringkasanTampil = (mode === 'harian' || mode === 'bulanan') ? '' : 'none';
   document.querySelector('.hero-register').style.display = ringkasanTampil;
@@ -77,6 +93,9 @@ function ubahMode(mode) {
   document.querySelector('.panel-chart').style.display = ringkasanTampil;
   document.querySelector('.panel-nota').style.display = ringkasanTampil;
   document.getElementById('panelQris').style.display = (mode === 'qris') ? 'block' : 'none';
+  var pShopee=document.getElementById('panelShopee'); if(pShopee) pShopee.style.display=(mode==='shopee')?'block':'none';
+  var pGrab=document.getElementById('panelGrab'); if(pGrab) pGrab.style.display=(mode==='grab')?'block':'none';
+  var pGofood=document.getElementById('panelGofood'); if(pGofood) pGofood.style.display=(mode==='gofood')?'block':'none';
   document.getElementById('panelDapur').style.display = (mode === 'dapur') ? 'block' : 'none';
 
   // PENTING: Chart.js menyimpan ukuran canvas saat dibuat/di-update. Kalau
@@ -85,21 +104,31 @@ function ubahMode(mode) {
   // ditampilkan lagi -- karena ukurannya ke-cache 0 saat itu. Solusinya:
   // hancurkan instance chart lama begitu panel-chart disembunyikan, supaya
   // dibuat ULANG dari nol (dengan ukuran yang benar) saat ditampilkan lagi.
-  if (mode === 'qris' && chartInstance) {
+  if ((mode === 'qris' || mode==='shopee' || mode==='grab' || mode==='gofood') && chartInstance) {
     chartInstance.destroy();
     chartInstance = null;
   }
 
   if (mode === 'qris') {
     document.getElementById('dashFooter').innerHTML = 'Sumber data: tab <strong>Transaksi</strong> &amp; <strong>Transaksi Mamah</strong> (gabungan, khusus QRIS)';
+  } else if (mode === 'shopee') {
+    document.getElementById('dashFooter').innerHTML = 'Sumber data: tab <strong>Transaksi</strong> &amp; <strong>Transaksi Mamah</strong> (gabungan, khusus Shopee)';
+  } else if (mode === 'grab') {
+    document.getElementById('dashFooter').innerHTML = 'Sumber data: tab <strong>Transaksi</strong> &amp; <strong>Transaksi Mamah</strong> (gabungan, khusus Grab)';
+  } else if (mode === 'gofood') {
+    document.getElementById('dashFooter').innerHTML = 'Sumber data: tab <strong>Transaksi</strong> &amp; <strong>Transaksi Mamah</strong> (gabungan, khusus Gofood)';
   } else if (mode === 'dapur') {
     document.getElementById('dashFooter').innerHTML = 'Sumber data: tab <strong>Log_Stok_Ayam</strong> &amp; <strong>Transaksi</strong> (ayam terjual)';
   } else {
     document.getElementById('dashFooter').innerHTML = 'Sumber data: tab <strong>Transaksi</strong> &middot; tidak termasuk Transaksi Mamah';
   }
 
-  if (mode === 'harian' || mode === 'bulanan') {
-    document.getElementById('grafikModeLabel').textContent = (mode === 'harian') ? 'Per Hari' : 'Per Bulan';
+  if (mode === 'harian') {
+    document.getElementById('grafikModeLabel').textContent = 'Per Hari';
+  } else if (mode === 'bulanan') {
+    var _b = document.getElementById('selectBulan'); var _t = document.getElementById('selectTahun');
+    var _nm = _b ? _b.options[_b.selectedIndex].text : ''; var _tv = _t ? _t.value : '';
+    document.getElementById('grafikModeLabel').textContent = 'Ayam Terjual Per Hari (1–' + new Date(parseInt(_tv,10), parseInt(_b.value,10), 0).getDate() + ') · ' + _nm + ' ' + _tv;
   }
   muatUlangData();
 }
@@ -133,6 +162,30 @@ function muatUlangData() {
       .ambilDaftarTransaksiQris(parseInt(bagian[2], 10), parseInt(bagian[1], 10), parseInt(bagian[0], 10));
     return;
   }
+  if (modeAktif === 'shopee') {
+    const tglInput = document.getElementById('selectTanggal').value;
+    if (!tglInput) { sedangMuat = false; btn.classList.remove('is-loading'); return; }
+    const bagian = tglInput.split('-');
+    const onSukses = (res) => { sedangMuat=false; btn.classList.remove('is-loading'); if(!res||res.status!=='ok'){tampilkanError();return;} renderShopeeList(res); };
+    google.script.run.withSuccessHandler(onSukses).withFailureHandler(onGagal).ambilDaftarTransaksiShopee(parseInt(bagian[2],10), parseInt(bagian[1],10), parseInt(bagian[0],10));
+    return;
+  }
+  if (modeAktif === 'grab') {
+    const tglInput = document.getElementById('selectTanggal').value;
+    if (!tglInput) { sedangMuat = false; btn.classList.remove('is-loading'); return; }
+    const bagian = tglInput.split('-');
+    const onSukses = (res) => { sedangMuat=false; btn.classList.remove('is-loading'); if(!res||res.status!=='ok'){tampilkanError();return;} renderGrabList(res); };
+    google.script.run.withSuccessHandler(onSukses).withFailureHandler(onGagal).ambilDaftarTransaksiGrab(parseInt(bagian[2],10), parseInt(bagian[1],10), parseInt(bagian[0],10));
+    return;
+  }
+  if (modeAktif === 'gofood') {
+    const tglInput = document.getElementById('selectTanggal').value;
+    if (!tglInput) { sedangMuat = false; btn.classList.remove('is-loading'); return; }
+    const bagian = tglInput.split('-');
+    const onSukses = (res) => { sedangMuat=false; btn.classList.remove('is-loading'); if(!res||res.status!=='ok'){tampilkanError();return;} renderGofoodList(res); };
+    google.script.run.withSuccessHandler(onSukses).withFailureHandler(onGagal).ambilDaftarTransaksiGofood(parseInt(bagian[2],10), parseInt(bagian[1],10), parseInt(bagian[0],10));
+    return;
+  }
 
   if (modeAktif === 'dapur') {
     const tglInput = document.getElementById('selectTanggal').value; // format "yyyy-MM-dd"
@@ -149,9 +202,39 @@ function muatUlangData() {
     return;
   }
 
+  if (modeAktif === 'harian') {
+    const tglInput = document.getElementById('selectHarianTanggal').value;
+    if (!tglInput) { sedangMuat = false; btn.classList.remove('is-loading'); return; }
+    const bagian = tglInput.split('-');
+    const onSuksesHarian = (res) => {
+      sedangMuat = false;
+      btn.classList.remove('is-loading');
+      if (!res || res.status !== 'ok') { tampilkanError(); return; }
+      // Reuse renderDashboard for per-tanggal by mapping minimal fields
+      document.getElementById('figPeriode').textContent = res.periodeLabel.toUpperCase();
+      document.getElementById('figGrandTotal').textContent = formatRupiahDash(res.grandTotal);
+      document.getElementById('kpiRataRata').textContent = formatRupiahDash(res.grandTotal);
+      document.getElementById('kpiAyam').textContent = (res.ayamTerjual || 0).toLocaleString('id-ID') + ' pcs';
+      document.getElementById('kpiAyamRata').textContent = 'hari ini';
+      document.getElementById('kpiNasi').textContent = (res.nasiTerjual || 0).toLocaleString('id-ID') + ' porsi';
+      document.getElementById('kpiNasiKg').textContent = '~' + (Number(res.nasiLiter)||0).toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' L';
+      var kpiCashEl=document.getElementById('kpiCash'); if(kpiCashEl) kpiCashEl.textContent = formatRupiahDash(res.totalCash || 0);
+      document.getElementById('kpiIncome').textContent = formatRupiahDash(res.incomeKotor !== undefined ? res.incomeKotor : res.grandTotal);
+      document.getElementById('kpiPengeluaran').textContent = formatRupiahDash(res.totalPengeluaran || 0);
+      try{
+        renderChart({labels:[String(res.tanggal)], values:[res.grandTotal]});
+        renderMetode([], res.grandTotal);
+      }catch(e){}
+      if (!res.adaData) document.getElementById('emptyState').style.display = 'block';
+      else document.getElementById('emptyState').style.display = 'none';
+    };
+    google.script.run.withSuccessHandler(onSuksesHarian).withFailureHandler(onGagal).ambilRekapPerHari(parseInt(bagian[2],10), parseInt(bagian[1],10), parseInt(bagian[0],10));
+    return;
+  }
+
+  // Bulanan: month picker 1..akhir bulan
   const bulan = document.getElementById('selectBulan').value;
   const tahun = document.getElementById('selectTahun').value;
-
   const onSukses = (res) => {
     sedangMuat = false;
     btn.classList.remove('is-loading');
@@ -161,12 +244,7 @@ function muatUlangData() {
     }
     renderDashboard(res);
   };
-
-  if (modeAktif === 'harian') {
-    google.script.run.withSuccessHandler(onSukses).withFailureHandler(onGagal).ambilRekapHarian(bulan, tahun);
-  } else {
-    google.script.run.withSuccessHandler(onSukses).withFailureHandler(onGagal).ambilRekapBulanan(tahun);
-  }
+  google.script.run.withSuccessHandler(onSukses).withFailureHandler(onGagal).ambilRekapHarian(parseInt(bulan,10), parseInt(tahun,10));
 }
 
 function sembunyikanState() {
@@ -187,6 +265,9 @@ function renderDashboard(res) {
   document.getElementById('kpiRataRata').textContent = formatRupiahDash(res.rataRataPerHari);
   document.getElementById('kpiAyam').textContent = (res.ayamTerjual || 0).toLocaleString('id-ID') + ' pcs';
   document.getElementById('kpiAyamRata').textContent = 'rata-rata ' + (res.ayamRataRataPerHari || 0).toLocaleString('id-ID') + ' pcs/hari';
+  document.getElementById('kpiNasi').textContent = (res.nasiTerjual || 0).toLocaleString('id-ID') + ' porsi';
+  document.getElementById('kpiNasiKg').textContent = '~' + (Number(res.nasiLiter)||0).toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' L';
+  var kpiCashEl=document.getElementById('kpiCash'); if(kpiCashEl) kpiCashEl.textContent = formatRupiahDash(res.totalCash || 0);
   document.getElementById('kpiIncome').textContent = formatRupiahDash(res.incomeKotor);
   document.getElementById('kpiPengeluaran').textContent = formatRupiahDash(res.totalPengeluaran);
 
@@ -195,7 +276,7 @@ function renderDashboard(res) {
   // tetap tampil -- satu bagian gagal tidak boleh menggagalkan seluruh
   // dashboard.
   try {
-    renderChart(res.chart);
+    renderChart(res.chart, res.chartAyam);
   } catch (errChart) {
     console.error('Gagal render grafik:', errChart);
   }
@@ -206,7 +287,7 @@ function renderDashboard(res) {
   }
 }
 
-function renderChart(chartData) {
+function renderChart(chartData, chartAyamData) {
   if (typeof Chart === 'undefined') {
     console.error('Chart.js belum siap (window.Chart undefined) -- grafik dilewati, cek apakah script CDN Chart.js gagal dimuat.');
     return;
@@ -214,39 +295,80 @@ function renderChart(chartData) {
   const ctx = document.getElementById('grafikBatang').getContext('2d');
   const style = getComputedStyle(document.documentElement);
   const emberColor = style.getPropertyValue('--ember').trim() || '#e67e22';
+  const mintColor = style.getPropertyValue('--mint').trim() || '#2ecc71';
   const textDim = style.getPropertyValue('--text-dim').trim() || '#a89a8c';
 
+  // dual-dataset: Omzet (y) + Ayam pcs (y1)
+  var hasAyam = !!(chartAyamData && chartAyamData.values);
+
   if (chartInstance) {
-    chartInstance.data.labels = chartData.labels;
-    chartInstance.data.datasets[0].data = chartData.values;
-    chartInstance.update();
-    return;
+    // jika struktur dataset berubah (1→2 atau 2→1) recreate
+    var needRecreate = hasAyam ? (chartInstance.data.datasets.length !== 2) : (chartInstance.data.datasets.length !== 1);
+    if (needRecreate) { chartInstance.destroy(); chartInstance = null; }
+    else {
+      chartInstance.data.labels = chartData.labels;
+      chartInstance.data.datasets[0].data = chartData.values;
+      if (hasAyam) chartInstance.data.datasets[1].data = chartAyamData.values;
+      chartInstance.update();
+      return;
+    }
+  }
+
+  var datasets = [{
+    label: 'Omzet',
+    data: chartData.values,
+    backgroundColor: emberColor,
+    borderRadius: 4,
+    maxBarThickness: 28,
+    yAxisID: hasAyam ? 'y' : 'y',
+    order: 2
+  }];
+  if (hasAyam) {
+    datasets.push({
+      label: 'Ayam Terjual',
+      data: chartAyamData.values,
+      backgroundColor: mintColor,
+      borderRadius: 4,
+      maxBarThickness: 28,
+      yAxisID: 'y1',
+      order: 1
+    });
   }
 
   chartInstance = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels: chartData.labels,
-      datasets: [{
-        label: 'Omzet',
-        data: chartData.values,
-        backgroundColor: emberColor,
-        borderRadius: 4,
-        maxBarThickness: 28
-      }]
-    },
+    data: { labels: chartData.labels, datasets: datasets },
     options: {
       responsive: true,
-      plugins: { legend: { display: false }, tooltip: {
-        callbacks: { label: (c) => formatRupiahDash(c.parsed.y) }
-      }},
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: hasAyam, labels: { color: textDim, boxWidth: 12, font: { size: 10 } } },
+        tooltip: {
+          callbacks: {
+            label: (c) => {
+              if (c.dataset.label === 'Ayam Terjual') return c.dataset.label + ': ' + c.parsed.y + ' pcs';
+              return c.dataset.label + ': ' + formatRupiahDash(c.parsed.y);
+            }
+          }
+        }
+      },
       scales: {
         x: { ticks: { color: textDim, font: { size: 10 } }, grid: { display: false } },
-        y: { ticks: { color: textDim, font: { size: 10 },
-              callback: (v) => 'Rp ' + (v / 1000) + 'rb' }, grid: { color: 'rgba(255,255,255,0.06)' } }
+        y: {
+          type: 'linear', position: 'left',
+          ticks: { color: textDim, font: { size: 10 }, callback: (v) => 'Rp ' + (v / 1000) + 'rb' },
+          grid: { color: 'rgba(255,255,255,0.06)' }
+        },
+        y1: hasAyam ? {
+          type: 'linear', position: 'right',
+          ticks: { color: mintColor, font: { size: 10 }, callback: (v) => v + ' pcs' },
+          grid: { display: false }
+        } : undefined
       }
     }
   });
+  // hapus y1 undefined agar tidak error di versi Chart.js tertentu
+  if (!hasAyam && chartInstance.options.scales.y1) delete chartInstance.options.scales.y1;
 }
 
 function renderMetode(metodeArr, grandTotal) {
@@ -281,6 +403,19 @@ function renderMetode(metodeArr, grandTotal) {
 function renderQrisList(res) {
   document.getElementById('qrisTotalLabel').textContent =
     formatRupiahDash(res.totalQris) + ' · ' + (res.jumlahNota || 0) + ' struk';
+  // Per-bulan per-kategori
+  var elAyamBulan = document.getElementById('qrisAyamBulan');
+  if(elAyamBulan) elAyamBulan.textContent = formatRupiahDash(res.totalAyamBulan || 0);
+  var elMamahBulan = document.getElementById('qrisMamahBulan');
+  if(elMamahBulan) elMamahBulan.textContent = formatRupiahDash(res.totalMamahBulan || 0);
+  var elAyamBulanC = document.getElementById('qrisAyamBulanCount');
+  if(elAyamBulanC) elAyamBulanC.textContent = (res.jumlahAyamBulan || 0) + ' struk';
+  var elMamahCount = document.getElementById('qrisMamahBulanCount');
+  if(elMamahCount) elMamahCount.textContent = (res.jumlahMamahBulan || 0) + ' struk';
+  var elAyamHari = document.getElementById('qrisAyamHari');
+  if(elAyamHari) elAyamHari.textContent = formatRupiahDash(res.totalAyamHari || 0) + ' · ' + (res.jumlahAyamHari||0) + ' struk';
+  var elMamahHari = document.getElementById('qrisMamahHari');
+  if(elMamahHari) elMamahHari.textContent = formatRupiahDash(res.totalMamahHari || 0) + ' · ' + (res.jumlahMamahHari||0) + ' struk';
 
   const wrap = document.getElementById('listQris');
   wrap.innerHTML = '';
@@ -304,6 +439,35 @@ function renderQrisList(res) {
     wrap.appendChild(row);
   });
 }
+function renderOjolList(res, prefix){
+  var cap = prefix.charAt(0).toUpperCase()+prefix.slice(1);
+  var totalLabel = document.getElementById(prefix+'TotalLabel');
+  if(totalLabel) totalLabel.textContent = formatRupiahDash(res.totalQris || res.total || 0) + ' · ' + (res.jumlahNota||0) + ' struk';
+  var elAyamBulan=document.getElementById(prefix+'AyamBulan'); if(elAyamBulan) elAyamBulan.textContent=formatRupiahDash(res.totalAyamBulan||0);
+  var elMamahBulan=document.getElementById(prefix+'MamahBulan'); if(elMamahBulan) elMamahBulan.textContent=formatRupiahDash(res.totalMamahBulan||0);
+  var elAyamBC=document.getElementById(prefix+'AyamBulanCount'); if(elAyamBC) elAyamBC.textContent=(res.jumlahAyamBulan||0)+' struk';
+  var elMamahBC=document.getElementById(prefix+'MamahBulanCount'); if(elMamahBC) elMamahBC.textContent=(res.jumlahMamahBulan||0)+' struk';
+  var elAyamHari=document.getElementById(prefix+'AyamHari'); if(elAyamHari) elAyamHari.textContent=formatRupiahDash(res.totalAyamHari||0)+' · '+(res.jumlahAyamHari||0)+' struk';
+  var elMamahHari=document.getElementById(prefix+'MamahHari'); if(elMamahHari) elMamahHari.textContent=formatRupiahDash(res.totalMamahHari||0)+' · '+(res.jumlahMamahHari||0)+' struk';
+  var wrap=document.getElementById('list'+cap);
+  if(!wrap) wrap=document.getElementById('list'+prefix.charAt(0).toUpperCase()+prefix.slice(1));
+  // fallback for Gofood capital G
+  if(!wrap) wrap=document.getElementById('listGofood');
+  if(wrap){
+    wrap.innerHTML='';
+    if(!res.daftar || res.daftar.length===0){ document.getElementById('emptyState').style.display='block'; return; }
+    res.daftar.forEach(function(n){
+      var isVoid=n.status==='VOID';
+      var row=document.createElement('div');
+      row.className='qris-row'+(isVoid?' is-void':'');
+      row.innerHTML='<span class="qris-jam">'+n.jam+'</span><span class="qris-sumber">'+n.sumber+'</span><span class="qris-leader"></span><span class="qris-nilai">'+formatRupiahDash(n.total)+'</span>'+(isVoid?'<span class="qris-badge-void">VOID</span>':'');
+      wrap.appendChild(row);
+    });
+  }
+}
+function renderShopeeList(res){ renderOjolList(res,'shopee'); }
+function renderGrabList(res){ renderOjolList(res,'grab'); }
+function renderGofoodList(res){ renderOjolList(res,'gofood'); }
 
 function renderDapurList(res) {
   document.getElementById('kpiDapurGoreng').textContent = (res.ayamDigoreng || 0).toLocaleString('id-ID') + ' pcs';
@@ -333,6 +497,40 @@ function renderDapurList(res) {
   });
 }
 
+// Wallet Kas Toko — global, tidak terfilter periode
+function fetchWallet(){
+  var badge = document.getElementById('walletDashBadge');
+  if(badge) badge.textContent = 'Memuat...';
+  google.script.run.withSuccessHandler(function(r){
+    if(!r || r.status!=='ok'){ if(badge) badge.textContent='Gagal'; return; }
+    renderWallet(r);
+  }).withFailureHandler(function(){ if(badge) badge.textContent='Gagal'; }).getWalletSaldo();
+}
+function renderWallet(r){
+  var fmt = function(v){ return 'Rp ' + Math.round(Number(v)||0).toLocaleString('id-ID'); };
+  document.getElementById('walletSaldo').textContent = fmt(r.saldo);
+  // FIX #1: modal dari server (Laporan Tutup Toko hari ini, Asia/Jakarta),
+  // bukan localStorage cross-origin (script.google.com vs github.io) yang
+  // selalu 0 + toISOString UTC salah hari WIB.
+  var modal = Number(r.modalLaci) || 0;
+  // compat: cache lama sebelum fix tidak ada modalLaci/bisaDisetor
+  if (r.modalLaci === undefined && r.bisaDisetor === undefined) {
+    modal = 0;
+  }
+  var bisa = (r.bisaDisetor !== undefined) ? Number(r.bisaDisetor) : Math.max(0, (Number(r.saldo)||0) - modal);
+  document.getElementById('walletModal').textContent = fmt(modal);
+  document.getElementById('walletBisa').textContent = fmt(bisa);
+  var b=r.breakdown||{};
+  document.getElementById('walletSaldoAwal').textContent = fmt(b.saldoAwal);
+  document.getElementById('walletCashAyam').textContent = fmt(b.cashAyam);
+  document.getElementById('walletBelanja').textContent = fmt(b.belanja);
+  document.getElementById('walletTarik').textContent = fmt(b.tarikTunai);
+  document.getElementById('walletSetoran').textContent = fmt(b.setoranOwner);
+  document.getElementById('walletAdjust').textContent = fmt(b.adjustment);
+  var badge2=document.getElementById('walletDashBadge');
+  if(badge2) badge2.textContent = 'Terkini';
+}
+
 // PENTING: pakai event 'load' (bukan 'DOMContentLoaded') supaya kita
 // menunggu SEMUA resource eksternal (termasuk script Chart.js dari CDN)
 // benar-benar selesai dimuat dulu sebelum render pertama. Di dalam sandbox
@@ -344,4 +542,5 @@ function renderDapurList(res) {
 window.addEventListener('load', () => {
   inisialisasiPicker();
   muatUlangData();
+  fetchWallet();
 });

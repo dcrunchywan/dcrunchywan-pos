@@ -4,7 +4,7 @@
       --sidebar-width: 100px; 
     }
     
-    html, body { height: 100%; margin: 0; padding: 0; background-color: #f4f6f8; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; }
+    html, body { height: 100%; margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; overflow: hidden; }
     .app-container { display: flex; height: 100vh; width: 100vw; overflow: hidden; position: relative; }
 
     /* LAYOUT SIDEBAR NAV (Default desktop / tablet besar) */
@@ -126,3 +126,134 @@
 
     .dashboard-card { border: none; border-radius: 12px; transition: transform 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.03); }
     .dashboard-card:hover { transform: translateY(-3px); }
+
+    /* Kasir - Riwayat Dapur realtime (di bawah form input) — 2 baris agar keterangan tidak terpotong */
+    .kasir-log-row { display: flex; flex-direction: column; gap: 2px; padding: 9px 6px; border-bottom: 1px dashed #dee2e6; font-size: 0.78rem; }
+    .kasir-log-row:last-child { border-bottom: none; }
+    .kasir-log-row.is-pending { background: #fff8e1; border-radius: 8px; }
+    .kasir-log-main { display: flex; align-items: baseline; gap: 8px; width: 100%; }
+    .kasir-log-jam { font-family: 'Courier New', monospace; font-weight: 800; color: #2c3e50; white-space: nowrap; min-width: 44px; }
+    .kasir-log-jenis { font-weight: 700; color: #2c3e50; white-space: normal; word-break: break-word; flex: 0 1 auto; }
+    .kasir-log-leader { display: none; }
+    .kasir-log-jumlah { font-family: 'Courier New', monospace; font-weight: 800; white-space: nowrap; margin-left: auto; padding-left: 12px; }
+    .kasir-log-jumlah.is-plus { color: #27ae60; }
+    .kasir-log-jumlah.is-minus { color: #e74c3c; }
+    .kasir-log-ket-row { padding-left: 52px; font-size: 0.70rem; color: #6c757d; white-space: normal; word-break: break-word; line-height: 1.3; }
+    .kasir-log-ket-row:empty { display: none; }
+    /* Horizontal/tablet landscape: card sudah max-width 700px centered, hapus jarak jauh */
+    @media (min-width: 992px) {
+      .kasir-log-main { gap: 10px; }
+    }
+
+    /* REKAP — modern SaaS POS, clean premium airy */
+    .rekap-polish {
+      background: #ffffff;
+      border: 1px solid #f1f5f9;
+      border-radius: 20px;
+      box-shadow: 0 4px 24px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.03);
+      overflow: hidden;
+      position: relative;
+    }
+    .rekap-section {
+      background: #ffffff;
+      border: 1px solid #f1f5f9;
+      border-radius: 20px;
+      padding: 16px;
+      box-shadow: 0 4px 16px rgba(44,62,80,0.04);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .rekap-section:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(44,62,80,0.06); }
+    .rekap-section-title {
+      font-size: 0.68rem; font-weight: 800; letter-spacing: 0.1em;
+      color: #64748b; margin: 0 0 12px 0; text-transform: uppercase;
+      display:flex; align-items:center; gap:8px;
+    }
+    .rekap-section-title::before{
+      content:""; width:28px; height:3px; border-radius:999px;
+      background: linear-gradient(90deg, #e67e22, #ffb066);
+      display:inline-block;
+    }
+    .rekap-group + .rekap-group { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #f1f5f9; }
+    .rekap-subtitle { font-size: 0.62rem; font-weight: 700; color: #94a3b8; letter-spacing: 0.06em; margin-bottom: 8px; text-transform: uppercase; }
+    .rekap-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.84rem; padding: 7px 0; }
+    .rekap-row .rekap-label { color: #64748b; font-weight: 500; }
+    .rekap-row .rekap-value { font-weight: 800; color: #1e293b; font-variant-numeric: tabular-nums; }
+    .rekap-row-muted .rekap-value { font-weight: 800; }
+    .rekap-inputs .form-label { margin-bottom: 6px; color: #475569; font-weight: 600; font-size: 0.74rem; }
+    .rekap-inputs .form-control {
+      border-radius: 14px; border: 1px solid #e2e8f0; padding: 12px 14px;
+      background: #f8fafc; font-weight: 600; transition: all 0.2s;
+    }
+    .rekap-inputs .form-control::placeholder{ color:#94a3b8; font-weight:400; }
+    .rekap-inputs .form-control:focus { border-color: #ffb066; box-shadow: 0 0 0 4px rgba(230,126,34,0.12); background: #ffffff; }
+    .rekap-hero {
+      background: linear-gradient(135deg, #ffffff 0%, #fffaf5 100%);
+      color: #1e293b; border: 1px solid #fff0e0;
+      border-radius: 20px; padding: 20px; text-align: center;
+      box-shadow: 0 8px 24px rgba(230,126,34,0.08), inset 0 1px 0 rgba(255,255,255,0.8);
+      position: relative; overflow:hidden;
+    }
+    .rekap-hero::after{
+      content:""; position:absolute; bottom:-20px; left:-20px;
+      width:140px; height:140px;
+      background: radial-gradient(circle, rgba(46,204,113,0.06) 0%, transparent 70%);
+      pointer-events:none;
+    }
+    .rekap-hero-head { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.12em; color: #e67e22; margin-bottom: 6px; text-transform: uppercase; }
+    .rekap-hero-caption { font-size: 0.72rem; color: #94a3b8; margin-bottom: 10px; font-weight: 500; }
+    .rekap-hero-value { font-size: 2.1rem; font-weight: 800; color: #0f172a; line-height: 1.1; margin-bottom: 14px; letter-spacing: -0.8px; }
+    .rekap-hero-breakdown { background: #ffffff; border: 1px solid #f1f5f9; border-radius: 16px; padding: 14px; text-align: left; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+    .rekap-hero-line { display: flex; justify-content: space-between; font-size: 0.8rem; padding: 6px 0; color: #64748b; }
+    .rekap-hero-line.is-highlight { font-weight: 800; color: #0f172a; border-top: 1px solid #f1f5f9; margin-top: 8px; padding-top: 12px; }
+    .rekap-check .rekap-selisih {
+      display: flex; justify-content: space-between; align-items: center;
+      background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+      border: 1px solid #f1f5f9; border-radius: 16px; padding: 14px 16px; margin-top: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    }
+    .rekap-selisih-left { display: flex; align-items: baseline; gap: 8px; }
+
+    /* Blind Cash Count helper — soft, friendly */
+    .rekap-blind-helper {
+      background: linear-gradient(135deg, #fffbeb 0%, #fff7ed 100%);
+      border: 1px solid #fed7aa; border-radius: 16px;
+      padding: 12px 14px; font-size: 0.76rem; font-weight: 600; color: #9a3412;
+      text-align: center; margin-top: 14px; line-height: 1.5;
+      box-shadow: 0 4px 12px rgba(251,146,60,0.08);
+    }
+    .rekap-blind-helper--light {
+      background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+      border-color: #bfdbfe; color: #1e40af;
+      box-shadow: 0 4px 12px rgba(59,130,246,0.06);
+    }
+    .rekap-hero.is-blind .rekap-hero-value, .rekap-hero.is-blind .rekap-hero-breakdown { display: none !important; }
+    .rekap-check.is-blind #rekapCheckTeoritisRow, .rekap-check.is-blind #rekapSelisihBox { display: none !important; }
+
+    /* Wallet Kas Toko — very light blue tinted, premium */
+    .wallet-kas-card {
+      background: #f8fbff;
+      border: 1px solid #e0eaff; border-radius: 18px;
+      box-shadow: 0 2px 12px rgba(37,99,235,0.04);
+      overflow: hidden; position: relative;
+    }
+    .wallet-kas-card #walletSaldoValue { letter-spacing: -0.02em; color: #0f172a; font-variant-numeric: tabular-nums; }
+    .wallet-kas-card .btn-dark {
+      border-radius: 14px; padding: 12px; background: #0f172a; border-color: #0f172a;
+      font-weight: 700; letter-spacing: 0.02em; box-shadow: 0 4px 12px rgba(15,23,42,0.15);
+      transition: all 0.2s;
+    }
+    .wallet-kas-card .btn-dark:hover { background: #1e293b; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(15,23,42,0.2); }
+    .wallet-kas-card .btn-dark:active{ transform: translateY(0); }
+    .rekap-polish .btn-dark { border-radius: 14px; font-weight: 700; box-shadow: 0 4px 12px rgba(15,23,42,0.12); }
+    .rekap-polish .btn-outline-danger { border-radius: 14px; border-width: 1.5px; }
+    .rekap-polish h5 { font-weight: 800; letter-spacing: -0.02em; }
+
+    /* Kas - Jenis Keperluan chip toggle (ganti dropdown) — 1 tap di tablet, mirip metode-bayar */
+    .kas-chip-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .kas-chip-btn { border: 2px solid #dee2e6; background: #fff; color: #495057; font-weight: 700; font-size: 0.8rem; padding: 12px 6px; border-radius: 12px; transition: 0.15s; white-space: nowrap; }
+    .kas-chip-btn:active { transform: scale(0.97); }
+    .kas-chip-btn.active { color: #fff; box-shadow: 0 3px 8px rgba(0,0,0,0.12); }
+    .kas-chip-btn[data-jenis="Belanja Operasional"].active { background: #e67e22; border-color: #e67e22; }
+    .kas-chip-btn[data-jenis="Operasional"].active { background: #6c757d; border-color: #6c757d; }
+    .kas-chip-btn[data-jenis="Tarik Tunai"].active { background: #3498db; border-color: #3498db; }
+    .kas-chip-btn[data-jenis="Setoran Owner"].active { background: #2c3e50; border-color: #2c3e50; }

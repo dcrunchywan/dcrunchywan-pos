@@ -26,18 +26,25 @@
         <button class="mode-btn active" id="modeHarianBtn" onclick="ubahMode('harian')" role="tab" aria-selected="true">Harian</button>
         <button class="mode-btn" id="modeBulananBtn" onclick="ubahMode('bulanan')" role="tab" aria-selected="false">Bulanan</button>
         <button class="mode-btn" id="modeQrisBtn" onclick="ubahMode('qris')" role="tab" aria-selected="false">QRIS</button>
+        <button class="mode-btn" id="modeShopeeBtn" onclick="ubahMode('shopee')" role="tab" aria-selected="false">Shopee</button>
+        <button class="mode-btn" id="modeGrabBtn" onclick="ubahMode('grab')" role="tab" aria-selected="false">Grab</button>
+        <button class="mode-btn" id="modeGofoodBtn" onclick="ubahMode('gofood')" role="tab" aria-selected="false">Gofood</button>
         <button class="mode-btn" id="modeDapurBtn" onclick="ubahMode('dapur')" role="tab" aria-selected="false">Log Dapur</button>
       </div>
     </header>
 
     <div class="dash-controls">
-      <div class="picker-group" id="pickerBulanWrap">
+      <div class="picker-group" id="pickerBulanWrap" style="display:none;">
         <label for="selectBulan">Bulan</label>
         <select id="selectBulan"></select>
       </div>
-      <div class="picker-group" id="pickerTahunWrap">
+      <div class="picker-group" id="pickerTahunWrap" style="display:none;">
         <label for="selectTahun">Tahun</label>
         <select id="selectTahun"></select>
+      </div>
+      <div class="picker-group" id="pickerHarianTanggalWrap" style="display:none;">
+        <label for="selectHarianTanggal">Tanggal</label>
+        <input type="date" id="selectHarianTanggal">
       </div>
       <div class="picker-group" id="pickerTanggalWrap" style="display:none;">
         <label for="selectTanggal">Tanggal</label>
@@ -47,6 +54,33 @@
         <i class="fas fa-rotate"></i>
       </button>
     </div>
+
+    <section class="panel panel-wallet" id="panelWallet">
+      <div class="panel-head" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+        <h2>Kas Toko Hari Ini — <span>Wallet</span></h2>
+        <span class="kpi-label" id="walletDashBadge" style="color:var(--text-dim)">Memuat...</span>
+      </div>
+      <div class="wallet-hero" style="text-align:center;padding:12px 0 8px;">
+        <span class="kpi-label">Saldo Kas Toko</span>
+        <div class="kpi-value" id="walletSaldo" style="font-size:1.8rem;letter-spacing:0.5px;">Rp 0</div>
+        <span class="kpi-sub" id="walletSub">Uang toko yang dipegang &amp; belum disetor</span>
+      </div>
+      <div class="kpi-strip" style="grid-template-columns:1fr 1fr; margin:12px 0 0; gap:12px;">
+        <div class="kpi-card" style="border-top-color:var(--line)"><span class="kpi-label">Modal Kembalian</span><div class="kpi-value" id="walletModal" style="font-size:1.1rem">Rp 0</div></div>
+        <div class="kpi-card kpi-positive"><span class="kpi-label">Uang yang Bisa Disetor</span><div class="kpi-value" id="walletBisa" style="font-size:1.1rem">Rp 0</div><span class="kpi-sub">max(0, Saldo − Modal)</span></div>
+      </div>
+      <details style="margin-top:14px;">
+        <summary class="kpi-label" style="cursor:pointer;list-style:none;">Rincian <span style="font-weight:400; text-transform:none; letter-spacing:0">Saldo Awal / Cash / Belanja / Tarik / Setor / Adjust</span></summary>
+        <div class="nota-list" style="margin-top:10px;">
+          <div class="nota-row"><span class="nota-label">Saldo Awal</span><span class="nota-leader"></span><span class="nota-value" id="walletSaldoAwal">Rp 0</span></div>
+          <div class="nota-row"><span class="nota-label">Cash Ayam</span><span class="nota-leader"></span><span class="nota-value" id="walletCashAyam">Rp 0</span></div>
+          <div class="nota-row"><span class="nota-label">Belanja Cash</span><span class="nota-leader"></span><span class="nota-value" id="walletBelanja">Rp 0</span></div>
+          <div class="nota-row"><span class="nota-label">Tarik Tunai</span><span class="nota-leader"></span><span class="nota-value" id="walletTarik">Rp 0</span></div>
+          <div class="nota-row"><span class="nota-label">Setoran Owner</span><span class="nota-leader"></span><span class="nota-value" id="walletSetoran">Rp 0</span></div>
+          <div class="nota-row"><span class="nota-label">Adjustment</span><span class="nota-leader"></span><span class="nota-value" id="walletAdjust">Rp 0</span></div>
+        </div>
+      </details>
+    </section>
 
     <section class="hero-register">
       <div class="hero-perf-top" aria-hidden="true"></div>
@@ -67,6 +101,16 @@
         <span class="kpi-label">Ayam Terjual</span>
         <div class="kpi-value" id="kpiAyam">0 pcs</div>
         <span class="kpi-sub" id="kpiAyamRata">rata-rata 0 pcs/hari</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Nasi Terjual</span>
+        <div class="kpi-value" id="kpiNasi">0 porsi</div>
+        <span class="kpi-sub" id="kpiNasiKg">~0,00 L</span>
+      </div>
+      <div class="kpi-card" style="border-top-color:var(--ember)">
+        <span class="kpi-label">Total Cash</span>
+        <div class="kpi-value" id="kpiCash">Rp 0</div>
+        <span class="kpi-sub">Tunai</span>
       </div>
       <div class="kpi-card kpi-positive">
         <span class="kpi-label">Income Kotor</span>
@@ -100,7 +144,63 @@
         <h2>Daftar Transaksi <span>QRIS</span></h2>
         <div class="qris-total" id="qrisTotalLabel">Rp 0</div>
       </div>
+      <div class="kpi-strip" style="grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div class="kpi-card"><span class="kpi-label">QRIS Ayam — Bulan Ini</span><div class="kpi-value" id="qrisAyamBulan">Rp 0</div><span class="kpi-sub" id="qrisAyamBulanCount">0 struk</span></div>
+        <div class="kpi-card"><span class="kpi-label">QRIS Mamah — Bulan Ini</span><div class="kpi-value" id="qrisMamahBulan">Rp 0</div><span class="kpi-sub" id="qrisMamahBulanCount">0 struk</span></div>
+      </div>
+      <div class="kpi-strip" style="grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div class="kpi-card" style="border-top-color:var(--ember)"><span class="kpi-label">QRIS Ayam — Hari Ini</span><div class="kpi-value" id="qrisAyamHari">Rp 0</div></div>
+        <div class="kpi-card" style="border-top-color:var(--ember)"><span class="kpi-label">QRIS Mamah — Hari Ini</span><div class="kpi-value" id="qrisMamahHari">Rp 0</div></div>
+      </div>
       <div class="qris-list" id="listQris"></div>
+    </section>
+
+    <section class="panel panel-qris" id="panelShopee" style="display:none;">
+      <div class="panel-head panel-head-qris">
+        <h2>Daftar Transaksi <span>Shopee</span></h2>
+        <div class="qris-total" id="shopeeTotalLabel">Rp 0</div>
+      </div>
+      <div class="kpi-strip" style="grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div class="kpi-card"><span class="kpi-label">Shopee Ayam — Bulan Ini</span><div class="kpi-value" id="shopeeAyamBulan">Rp 0</div><span class="kpi-sub" id="shopeeAyamBulanCount">0 struk</span></div>
+        <div class="kpi-card"><span class="kpi-label">Shopee Mamah — Bulan Ini</span><div class="kpi-value" id="shopeeMamahBulan">Rp 0</div><span class="kpi-sub" id="shopeeMamahBulanCount">0 struk</span></div>
+      </div>
+      <div class="kpi-strip" style="grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div class="kpi-card" style="border-top-color:var(--ember)"><span class="kpi-label">Shopee Ayam — Hari Ini</span><div class="kpi-value" id="shopeeAyamHari">Rp 0</div></div>
+        <div class="kpi-card" style="border-top-color:var(--ember)"><span class="kpi-label">Shopee Mamah — Hari Ini</span><div class="kpi-value" id="shopeeMamahHari">Rp 0</div></div>
+      </div>
+      <div class="qris-list" id="listShopee"></div>
+    </section>
+
+    <section class="panel panel-qris" id="panelGrab" style="display:none;">
+      <div class="panel-head panel-head-qris">
+        <h2>Daftar Transaksi <span>Grab</span></h2>
+        <div class="qris-total" id="grabTotalLabel">Rp 0</div>
+      </div>
+      <div class="kpi-strip" style="grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div class="kpi-card"><span class="kpi-label">Grab Ayam — Bulan Ini</span><div class="kpi-value" id="grabAyamBulan">Rp 0</div><span class="kpi-sub" id="grabAyamBulanCount">0 struk</span></div>
+        <div class="kpi-card"><span class="kpi-label">Grab Mamah — Bulan Ini</span><div class="kpi-value" id="grabMamahBulan">Rp 0</div><span class="kpi-sub" id="grabMamahBulanCount">0 struk</span></div>
+      </div>
+      <div class="kpi-strip" style="grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div class="kpi-card" style="border-top-color:var(--ember)"><span class="kpi-label">Grab Ayam — Hari Ini</span><div class="kpi-value" id="grabAyamHari">Rp 0</div></div>
+        <div class="kpi-card" style="border-top-color:var(--ember)"><span class="kpi-label">Grab Mamah — Hari Ini</span><div class="kpi-value" id="grabMamahHari">Rp 0</div></div>
+      </div>
+      <div class="qris-list" id="listGrab"></div>
+    </section>
+
+    <section class="panel panel-qris" id="panelGofood" style="display:none;">
+      <div class="panel-head panel-head-qris">
+        <h2>Daftar Transaksi <span>Gofood</span></h2>
+        <div class="qris-total" id="gofoodTotalLabel">Rp 0</div>
+      </div>
+      <div class="kpi-strip" style="grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div class="kpi-card"><span class="kpi-label">Gofood Ayam — Bulan Ini</span><div class="kpi-value" id="gofoodAyamBulan">Rp 0</div><span class="kpi-sub" id="gofoodAyamBulanCount">0 struk</span></div>
+        <div class="kpi-card"><span class="kpi-label">Gofood Mamah — Bulan Ini</span><div class="kpi-value" id="gofoodMamahBulan">Rp 0</div><span class="kpi-sub" id="gofoodMamahBulanCount">0 struk</span></div>
+      </div>
+      <div class="kpi-strip" style="grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div class="kpi-card" style="border-top-color:var(--ember)"><span class="kpi-label">Gofood Ayam — Hari Ini</span><div class="kpi-value" id="gofoodAyamHari">Rp 0</div></div>
+        <div class="kpi-card" style="border-top-color:var(--ember)"><span class="kpi-label">Gofood Mamah — Hari Ini</span><div class="kpi-value" id="gofoodMamahHari">Rp 0</div></div>
+      </div>
+      <div class="qris-list" id="listGofood"></div>
     </section>
 
     <section class="panel panel-dapur" id="panelDapur" style="display:none;">

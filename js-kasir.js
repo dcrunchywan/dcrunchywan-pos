@@ -2,8 +2,9 @@
   let bypassModeActive = false; let isOwnerAuthenticated = false; let dataGlobalRekapKirim = {}; let dataOpnameLokalRaw = [];
   let diskonTipe = 'Rp'; let numpadBootstrapModalInstance = null;
 
-  document.getElementById('rekapDatePicker').value = new Date().toISOString().split('T')[0];
-  document.getElementById('historyDatePicker').value = new Date().toISOString().split('T')[0];
+  function getLocalIsoDate(d){ const x=d||new Date(); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); }
+  document.getElementById('rekapDatePicker').value = getLocalIsoDate();
+  document.getElementById('historyDatePicker').value = getLocalIsoDate();
 
 
   function toggleOwnerAuth() {
@@ -188,15 +189,200 @@
         tampilkanRingkasanDapur(res);
         localStorage.setItem('cache_ringkasan_dapur', JSON.stringify({ data: res, waktu: new Date().toISOString() }));
         setDapurStatusBadge('terkini');
+        // Sinkronkan juga list kasir realtime jika picker tidak sedang di tanggal lain
+        if (!isOwnerAuthenticated || !document.getElementById('kasirLogTanggalPicker')?.value || isKasirLogPickerHariIni()) {
+          renderKasirLogDapurGabungan(res);
+        }
       })
       .catch(err => {
         console.log("Offline mode: Gagal load ringkasan dapur hari ini, pakai estimasi lokal.");
         const cacheRaw = localStorage.getItem('cache_ringkasan_dapur');
-        if (!cacheRaw) { setDapurStatusBadge('offline'); return; }
+        if (!cacheRaw) {
+          setDapurStatusBadge('offline');
+          setKasirLogStatusBadge('offline');
+          // tetap tampilkan pending saja
+          renderKasirLogDapurGabungan({ daftarAktivitas: [], periodeLabel: new Date().toLocaleDateString('id-ID') });
+          return;
+        }
         const cache = JSON.parse(cacheRaw);
         const estimasi = computeOptimisticRingkasanEstimate(cache.data);
         tampilkanRingkasanDapur(estimasi);
         setDapurStatusBadge('estimasi', new Date(cache.waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
+        // cache.data sudah berisi daftarAktivitas server terakhir -> gabungkan pending
+        var estimasiLog = Object.assign({}, cache.data, estimasi);
+        // pastikan daftarAktivitas tetap dari cache untuk di-merge pending
+        estimasiLog.daftarAktivitas = cache.data.daftarAktivitas || [];
+        renderKasirLogDapurGabungan(estimasiLog, true, cache.waktu);
+      });
+  }
+
+  // ========== LOG DAPUR KASIR REALTIME (di bawah form input) ==========
+  function setKasirLogStatusBadge(state, waktuLabel) {
+    const badge = document.getElementById('kasirLogStatusBadge');
+    if (!badge) return;
+    if (state === 'loading') {
+      badge.className = 'badge rounded-pill bg-secondary extra-small';
+      badge.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Memuat...';
+    } else if (state === 'terkini') {
+      badge.className = 'badge rounded-pill bg-success extra-small';
+      badge.innerHTML = '<i class="fas fa-check me-1"></i>Terkini';
+    } else if (state === 'estimasi') {
+      badge.className = 'badge rounded-pill bg-warning text-dark extra-small';
+      badge.innerHTML = '<i class="fas fa-triangle-exclamation me-1"></i>Estimasi lokal' + (waktuLabel ? (' (server: ' + waktuLabel + ')') : '');
+    } else {
+      badge.className = 'badge rounded-pill bg-secondary extra-small';
+      badge.innerHTML = '<i class="fas fa-plug-circle-xmark me-1"></i>Offline, belum ada data';
+    }
+  }
+
+  function isKasirLogPickerHariIni() {
+    const picker = document.getElementById('kasirLogTanggalPicker');
+    if (!picker || !picker.value) return true;
+    const hariIniIso = getLocalIsoDate();
+    return picker.value === hariIniIso;
+  }
+
+  function formatJamDariPendingTgl(tglStr) {
+    try {
+      // toLocaleString('id-ID') bisa "01/09/2026, 21:43:00" atau "01/09/2026 21.43.00" tergantung browser — normalisasi
+      let s = (tglStr || '').toString().trim();
+      // ambil bagian waktu (setelah koma atau spasi terakhir)
+      let waktuPart = '';
+      if (s.indexOf(',') !== -1) waktuPart = s.split(',')[1] || '';
+      else {
+        const parts = s.split(' ');
+        waktuPart = parts[parts.length - 1] || '';
+      }
+      waktuPart = waktuPart.trim().replace(/\./g, ':');
+      const jamSplit = waktuPart.split(':');
+      if (jamSplit.length >= 2) {
+        const hh = (jamSplit[0] || '00').padStart(2,'0');
+        const mm = (jamSplit[1] || '00').padStart(2,'0');
+        if (!isNaN(parseInt(hh,10)) && !isNaN(parseInt(mm,10))) return hh + ':' + mm;
+      }
+    } catch(e) {}
+    const d = new Date();
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+
+  function buildPendingAktivitasUntukHariIni() {
+    const qOpr = JSON.parse(localStorage.getItem('sync_queue_opr') || '[]');
+    if (qOpr.length === 0) return [];
+    const hariIniIso = getLocalIsoDate();
+    // hanya pending yang tanggalnya hari ini (bandingkan lewat tgl string client)
+    return qOpr.map(function(row) {
+      const qty = Number(row.qty) || 0;
+      const jam = formatJamDariPendingTgl(row.tgl);
+      const ket = row.keterangan || '';
+      // Normalisasi agar cocok dengan format server daftarAktivitas
+      if (row.jenisAktivitas === 'Goreng Ayam') {
+        const hasil = [{ jenis: 'Goreng Ayam (Matang)', sektor: 'Etalase', jumlah: qty, keterangan: ket, jam: jam, pending: true }];
+        const minyak = Number(row.minyakUsed) || 0;
+        if (minyak > 0) hasil.push({ jenis: 'Pemakaian Minyak', sektor: 'Minyak', jumlah: -minyak, keterangan: ket, jam: jam, pending: true });
+        return hasil;
+      } else if (row.jenisAktivitas === 'Ayam Masuk') {
+        return [{ jenis: 'Ayam Masuk', sektor: 'Freezer', jumlah: qty, keterangan: ket || 'Masuk dari Supplier', jam: jam, pending: true }];
+      } else {
+        return [{ jenis: 'Ayam Rusak / Waste', sektor: 'Etalase', jumlah: -qty, keterangan: ket || 'Waste Dapur', jam: jam, pending: true }];
+      }
+    }).flat();
+  }
+
+  function renderKasirLogDapurGabungan(resServer, isEstimasi, waktuCacheIso) {
+    const container = document.getElementById('kasirLogDapurContainer');
+    const labelEl = document.getElementById('kasirLogPeriodeLabel');
+    if (!container) return;
+    const periode = (resServer && resServer.periodeLabel) ? resServer.periodeLabel : new Date().toLocaleDateString('id-ID');
+    if (labelEl) labelEl.textContent = periode;
+
+    const daftarServer = Array.isArray(resServer.daftarAktivitas) ? resServer.daftarAktivitas.slice() : [];
+    // Pending hanya ditampilkan jika melihat hari ini (bukan histori owner tanggal lain)
+    // Server sudah desc (terbaru atas), pending adalah yang PALING baru → taruh di paling atas, di-reverse agar pending terbaru paling atas
+    const tampilkanPending = !isOwnerAuthenticated || isKasirLogPickerHariIni();
+    let pendingList = tampilkanPending ? buildPendingAktivitasUntukHariIni() : [];
+    if (pendingList.length > 1) pendingList = pendingList.slice().reverse();
+    const gabungan = pendingList.concat(daftarServer);
+
+    if (gabungan.length === 0) {
+      container.innerHTML = '<div class="text-center text-muted py-3 extra-small">Belum ada aktivitas hari ini.</div>';
+      if (isEstimasi) setKasirLogStatusBadge('estimasi', waktuCacheIso ? new Date(waktuCacheIso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '');
+      else if (daftarServer.length === 0 && pendingList.length === 0) setKasirLogStatusBadge('terkini');
+      return;
+    }
+
+    let html = '';
+    gabungan.forEach(function(a) {
+      const isPending = !!a.pending;
+      const jamTampil = a.jam || '--:--';
+      const jumlah = Number(a.jumlah) || 0;
+      const isMinus = jumlah < 0;
+      const ketText = (a.keterangan || '').toString().trim();
+      const badgePending = isPending ? '<span class="badge bg-warning text-dark ms-1" style="font-size:0.6rem;">Menunggu sync</span>' : '';
+      html += `<div class="kasir-log-row ${isPending ? 'is-pending' : ''}">`
+        + `<div class="kasir-log-main">`
+        + `<span class="kasir-log-jam">${jamTampil}</span>`
+        + `<span class="kasir-log-jenis">${a.jenis}</span>`
+        + `<span class="kasir-log-leader"></span>`
+        + `<span class="kasir-log-jumlah ${isMinus ? 'is-minus' : 'is-plus'}">${jumlah > 0 ? '+' : ''}${jumlah.toLocaleString('id-ID')}</span>`
+        + badgePending
+        + `</div>`
+        + `<div class="kasir-log-ket-row">${ketText}</div>`
+        + `</div>`;
+    });
+    container.innerHTML = html;
+
+    if (isEstimasi) setKasirLogStatusBadge('estimasi', waktuCacheIso ? new Date(waktuCacheIso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '');
+    else setKasirLogStatusBadge(tampilkanPending && pendingList.length > 0 ? 'estimasi' : 'terkini', '');
+  }
+
+  function loadLogDapurKasir() {
+    // Owner mode dengan tanggal dipilih -> fetch histori tanggal itu
+    if (isOwnerAuthenticated) {
+      const picker = document.getElementById('kasirLogTanggalPicker');
+      const tglVal = picker ? picker.value : '';
+      if (tglVal) {
+        const bagian = tglVal.split('-'); // yyyy-MM-dd
+        const tgl = parseInt(bagian[2], 10);
+        const bln = parseInt(bagian[1], 10);
+        const thn = parseInt(bagian[0], 10);
+        setKasirLogStatusBadge('loading');
+        fetch(`${API_URL}?aksi=ambilLogDapurHarian&tanggal=${tgl}&bulan=${bln}&tahun=${thn}`)
+          .then(res => res.json())
+          .then(res => {
+            if (!res || res.status !== 'ok') throw new Error('Respon tidak valid');
+            renderKasirLogDapurGabungan(res);
+          })
+          .catch(err => {
+            console.log('Gagal load histori dapur tanggal lain', err);
+            setKasirLogStatusBadge('offline');
+            const container = document.getElementById('kasirLogDapurContainer');
+            if (container) container.innerHTML = '<div class="text-center text-muted py-3 extra-small">Gagal memuat histori. Cek koneksi.</div>';
+          });
+        return;
+      }
+    }
+    // Default kasir (atau owner tanpa tanggal / hari ini) -> hari ini
+    setKasirLogStatusBadge('loading');
+    fetch(`${API_URL}?aksi=ambilLogDapurHariIni`)
+      .then(res => res.json())
+      .then(res => {
+        if (!res || res.status !== 'ok') throw new Error('Respon tidak valid');
+        localStorage.setItem('cache_ringkasan_dapur', JSON.stringify({ data: res, waktu: new Date().toISOString() }));
+        // update ringkasan juga agar tetap sinkron
+        tampilkanRingkasanDapur(res);
+        setDapurStatusBadge('terkini');
+        renderKasirLogDapurGabungan(res);
+      })
+      .catch(err => {
+        console.log('Offline mode log dapur kasir, pakai cache + pending');
+        const cacheRaw = localStorage.getItem('cache_ringkasan_dapur');
+        if (!cacheRaw) {
+          setKasirLogStatusBadge('offline');
+          renderKasirLogDapurGabungan({ daftarAktivitas: [], periodeLabel: new Date().toLocaleDateString('id-ID') });
+          return;
+        }
+        const cache = JSON.parse(cacheRaw);
+        renderKasirLogDapurGabungan(cache.data, true, cache.waktu);
       });
   }
 
@@ -293,6 +479,14 @@
     const ownerSection = document.getElementById('ownerApprovalSection');
     const arsipSection = document.getElementById('ownerArsipSection');
     if (headerStok) { headerStok.style.setProperty('display', isOwnerAuthenticated ? 'table-cell' : 'none', 'important'); }
+    const kasirPickerWrap = document.getElementById('kasirLogOwnerPickerWrap');
+    const kasirPicker = document.getElementById('kasirLogTanggalPicker');
+    if (kasirPickerWrap) {
+      kasirPickerWrap.style.display = isOwnerAuthenticated ? 'block' : 'none';
+      if (isOwnerAuthenticated && kasirPicker && !kasirPicker.value) {
+        kasirPicker.value = getLocalIsoDate();
+      }
+    }
     if (isOwnerAuthenticated) {
       if(ownerSection) ownerSection.style.setProperty('display', 'block', 'important');
       if(arsipSection) arsipSection.style.setProperty('display', 'block', 'important');
@@ -300,26 +494,90 @@
     } else {
       if(ownerSection) ownerSection.style.setProperty('display', 'none', 'important');
       if(arsipSection) arsipSection.style.setProperty('display', 'none', 'important');
+      // kembali ke hari ini saat logout owner
+      if (kasirPicker) kasirPicker.value = getLocalIsoDate();
     }
     filterTabelOpname();
     renderMenu();
+    // wallet owner controls
+    try{ renderWalletKasToko(); }catch(e){}
+    // refresh log dapur sesuai mode (hari ini vs histori owner)
+    if (document.getElementById('panel-stok')?.classList.contains('active') || document.getElementById('panel-stok')?.classList.contains('show')) {
+      loadLogDapurKasir();
+    }
   }
 
+  let draftOpnameCache = [];
   function loadDraftOpnameServerSide() {
     const tbody = document.getElementById('ownerApprovalTableBody');
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Sinkronisasi Draft...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Sinkronisasi Draft...</td></tr>';
     fetch(`${API_URL}?aksi=ambilDraftOpname`)
       .then(res => res.json())
       .then((draftList) => {
-        if(!draftList || draftList.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" class="text-muted py-2">Tidak ada draft opname tertunda.</td></tr>';
+        draftOpnameCache = Array.isArray(draftList) ? draftList : [];
+        if(!draftOpnameCache || draftOpnameCache.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-muted py-2">Tidak ada draft opname tertunda.</td></tr>';
+          var ca=document.getElementById('checkAllDraft'); if(ca) ca.checked=false;
+          var ch=document.getElementById('checkAllDraftHead'); if(ch) ch.checked=false;
           return;
         }
         tbody.innerHTML = '';
-        draftList.forEach((x) => {
-          tbody.innerHTML += `<tr><td class="text-start fw-bold">${x.nama}</td><td><span class="badge bg-secondary">${x.sistem}</span></td><td><span class="badge bg-info">${x.fisik}</span></td><td class="fw-bold ${x.selisih < 0 ? 'text-danger':'text-success'}">${x.selisih}</td><td><button class="btn btn-xs btn-success py-1 px-2 fw-bold" onclick="approveDraftOpnameSingle(${x.rowNum}, '${x.nama}', ${x.fisik})">APPROVE</button></td></tr>`;
+        draftOpnameCache.forEach((x) => {
+          var escNama = x.nama.replace(/'/g, "\\'");
+          tbody.innerHTML += `<tr><td><input type="checkbox" class="form-check-input draft-check" value="${x.rowNum}" data-nama="${escNama}" data-fisik="${x.fisik}"></td><td class="text-start fw-bold">${x.nama}</td><td><span class="badge bg-secondary">${x.sistem}</span></td><td><span class="badge bg-info">${x.fisik}</span></td><td class="fw-bold ${x.selisih < 0 ? 'text-danger':'text-success'}">${x.selisih}</td><td><button class="btn btn-xs btn-success py-1 px-2 fw-bold" onclick="approveDraftOpnameSingle(${x.rowNum}, '${escNama}', ${x.fisik})">APPROVE</button></td></tr>`;
         });
+        var ca2=document.getElementById('checkAllDraft'); if(ca2) ca2.checked=false;
+        var ch2=document.getElementById('checkAllDraftHead'); if(ch2) ch2.checked=false;
       });
+  }
+  function toggleSelectAllDraft(checked){
+    document.querySelectorAll('.draft-check').forEach(function(cb){ cb.checked = checked; });
+    var a=document.getElementById('checkAllDraft'); if(a) a.checked=checked;
+    var b=document.getElementById('checkAllDraftHead'); if(b) b.checked=checked;
+  }
+  function getSelectedDrafts(){
+    var sel=[];
+    document.querySelectorAll('.draft-check:checked').forEach(function(cb){
+      sel.push({rowNum: parseInt(cb.value,10), nama: cb.getAttribute('data-nama'), fisik: parseInt(cb.getAttribute('data-fisik'),10)});
+    });
+    return sel;
+  }
+  function approveBulkSelected(){
+    var sel=getSelectedDrafts();
+    if(sel.length===0) return Swal.fire('Pilih Draft','Centang minimal 1 draft untuk di-approve.','info');
+    approveDraftBulk(sel);
+  }
+  function approveAllDrafts(){
+    if(!draftOpnameCache || draftOpnameCache.length===0) return Swal.fire('Kosong','Tidak ada draft.','info');
+    approveDraftBulk(draftOpnameCache.map(function(x){ return {rowNum:x.rowNum, nama:x.nama, fisik:x.fisik}; }));
+  }
+  function approveDraftBulk(list){
+    if(!list || list.length===0) return;
+    Swal.fire({ title: 'Approve '+list.length+' Draft?', text: 'Menyelaraskan stok terpilih menjadi nilai fisik kasir.', icon:'question', showCancelButton:true }).then(function(r){
+      if(!r.isConfirmed) return;
+      Swal.fire({ title: 'Memproses '+list.length+' Approval...', html: '0/'+list.length, allowOutsideClick:false, didOpen:function(){ Swal.showLoading(); }});
+      var idx=0, ok=0, fail=0;
+      function next(){
+        if(idx>=list.length){
+          Swal.close();
+          Swal.fire('Selesai','Berhasil: '+ok+', Gagal: '+fail,'info');
+          loadDraftOpnameServerSide(); loadStokBarang();
+          return;
+        }
+        var it=list[idx];
+        fetch(API_URL,{method:'POST', body:JSON.stringify({ aksi:'approveOpname', rowNum:it.rowNum, nama:it.nama, fisikVal:it.fisik })})
+          .then(function(res){ return res.json(); })
+          .then(function(res){
+            if(res.hasil==="Sukses") ok++; else fail++;
+          }).catch(function(){ fail++; })
+          .finally(function(){
+            idx++;
+            Swal.getHtmlContainer().innerHTML = idx+'/'+list.length + ' (OK:'+ok+' Gagal:'+fail+')';
+            next();
+          });
+      }
+      next();
+    });
   }
 
   function approveDraftOpnameSingle(rowNum, nama, fisikVal) {
@@ -621,7 +879,7 @@ const clientTxnId = crypto.randomUUID
   Swal.fire({ icon: 'success', title: 'Sukses!', timer: 1000, showConfirmButton: false }); 
   cart = []; document.getElementById('uangBayar').value = ''; document.getElementById('diskonNotaInput').value = '';
   document.getElementById('bypassModeToggle').checked = false; bypassModeActive = false;
-  updateUI(); if(btnPay) btnPay.disabled = false; attemptSync(); 
+  updateUI(); if(btnPay) btnPay.disabled = false; try{ renderWalletKasToko(); }catch(e){} attemptSync(); 
 }
 
   function requestArsipTahun() {
@@ -731,7 +989,7 @@ const clientTxnId = crypto.randomUUID
 
   function simpanKeHistoryLokal(tipe, obj) {
     let history = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
-    let tglIso = new Date().toISOString().split('T')[0];
+    let tglIso = getLocalIsoDate();
     history.push({ tipe: tipe, tglIso: tglIso, ...obj });
     localStorage.setItem('rekap_hari_ini', JSON.stringify(history));
   }
@@ -748,17 +1006,39 @@ const clientTxnId = crypto.randomUUID
   function ubahQtyTombol(index, delta) { const qtyBaru = (Number(cart[index]?.qty) || 0) + delta; ubahQtyManual(index, qtyBaru); }
   function toggleBypassMode() { const toggle = document.getElementById('bypassModeToggle'); bypassModeActive = toggle.checked; const uangBayarInput = document.getElementById('uangBayar'); if (bypassModeActive && document.getElementById('metodeBayar').value === 'Cash') { const diskonInputVal = parseInt(document.getElementById('diskonNotaInput').value, 10) || 0; let nominalPotongan = (diskonTipe === 'Rp') ? diskonInputVal : Math.round(totalBelanjaGlobal * (diskonInputVal / 100)); const totalAkhirSetelahDiskon = Math.max(0, totalBelanjaGlobal - nominalPotongan); uangBayarInput.value = totalAkhirSetelahDiskon; } else if (!bypassModeActive) { uangBayarInput.value = ''; } hitungKembalian(); }
   function handleMetodeBayarChange() { const metode = document.getElementById('metodeBayar').value; if (bypassModeActive && metode === 'Cash') { const diskonInputVal = parseInt(document.getElementById('diskonNotaInput').value, 10) || 0; let nominalPotongan = (diskonTipe === 'Rp') ? diskonInputVal : Math.round(totalBelanjaGlobal * (diskonInputVal / 100)); const totalAkhirSetelahDiskon = Math.max(0, totalBelanjaGlobal - nominalPotongan); document.getElementById('uangBayar').value = totalAkhirSetelahDiskon; } hitungKembalian(); }
-  function toggleCustomInputLabel() { const jenis = document.getElementById('jenisKas').value; const label = document.getElementById('labelNamaItem'); const input = document.getElementById('namaItemKas'); if (jenis === 'Tarik Tunai') { label.innerText = "Tujuan Tarik Tunai"; input.placeholder = "Setor ke Bos"; } else { label.innerText = "Nama Barang"; input.placeholder = "Gas / Beras"; } }
+  function pilihJenisKas(jenis) {
+    document.getElementById('jenisKas').value = jenis;
+    document.querySelectorAll('.kas-chip-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.jenis === jenis);
+    });
+    toggleCustomInputLabel();
+  }
+  function pilihMetodeKas(metode){
+    var sel = document.getElementById('metodeKas');
+    if(sel) sel.value = metode;
+    document.querySelectorAll('[data-metodekas]').forEach(function(btn){
+      btn.classList.toggle('active', btn.getAttribute('data-metodekas')===metode);
+    });
+  }
+  function toggleCustomInputLabel() { const jenis = document.getElementById('jenisKas').value; const label = document.getElementById('labelNamaItem'); const input = document.getElementById('namaItemKas'); if (jenis === 'Tarik Tunai') { label.innerText = "Tujuan Tarik Tunai"; input.placeholder = "Customer / QRIS Rp500rb"; } else if (jenis === 'Setoran Owner') { label.innerText = "Setoran ke Owner"; input.placeholder = "Owner / Setoran #001"; } else if (jenis === 'Operasional') { label.innerText = "Keperluan Operasional"; input.placeholder = "Listrik / Plastik"; } else { label.innerText = "Nama Barang"; input.placeholder = "Gas / Beras / Ayam"; } // sinkronkan chip active jika dipanggil via select
+    document.querySelectorAll('.kas-chip-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.jenis === jenis));
+    var wrap = document.getElementById('metodeKasWrap');
+    if(wrap){
+      var isBelanja = (jenis==='Belanja Operasional' || jenis==='Operasional');
+      wrap.style.display = isBelanja ? 'block' : 'none';
+      if(!isBelanja) pilihMetodeKas('Cash Toko');
+    }
+  }
 
   function refreshHistoryLogUI() {
     const container = document.getElementById('kasirHistoryLogContainer');
     if(!container) return;
-    const tglPilihan = document.getElementById('historyDatePicker')?.value || new Date().toISOString().split('T')[0];
+    const tglPilihan = document.getElementById('historyDatePicker')?.value || getLocalIsoDate();
     const historySemua = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
     // Filter ke tanggal yang dipilih saja (tglIso sudah disimpan per-entry
     // oleh simpanKeHistoryLokal) -- supaya riwayat kemarin tidak campur
     // dengan hari ini, dan bisa lihat riwayat tanggal lain lewat picker.
-    let history = historySemua.filter(x => (x.tglIso || new Date().toISOString().split('T')[0]) === tglPilihan);
+    let history = historySemua.filter(x => (x.tglIso || getLocalIsoDate()) === tglPilihan);
     if(history.length === 0) { container.innerHTML = '<div class="text-center text-muted py-3">Belum ada transaksi di tanggal ini.</div>'; return; }
 
     // Kelompokkan entri 'penjualan' per struk memakai notaIdGroup (semua
@@ -796,53 +1076,477 @@ const clientTxnId = crypto.randomUUID
         });
         html += `</div>`;
       } else if (b.tipe === 'kas') {
-        html += `<div class="history-log-row text-warning"><b>[KAS OUT]</b> ${b.jenis}: Rp ${(b.nominal || 0).toLocaleString('id-ID')}</div>`;
+        let warna = 'text-warning';
+        if (b.jenis === 'Setoran Owner') warna = 'text-primary';
+        else if (b.jenis === 'Tarik Tunai') warna = 'text-info';
+        else if (b.jenis === 'Belanja Operasional' || b.jenis === 'Operasional') warna = 'text-danger';
+        html += `<div class="history-log-row ${warna}"><b>[KAS ${b.jenis.toUpperCase()}]</b> ${b.jenis}: Rp ${(b.nominal || 0).toLocaleString('id-ID')}</div>`;
       }
     });
 
     container.innerHTML = html;
   }
 
-  function hitungRekapHarian() {
-    let history = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
-    let modalAwal = parseInt(document.getElementById('modalAwalInput').value, 10) || 0;
-    let targetTanggalPilihan = document.getElementById('rekapDatePicker').value; 
-    let cashAyam = 0, qrisAyam = 0, cashMamah = 0, qrisMamah = 0, belanja = 0, tarikTunai = 0; 
-    
-    history.forEach((x) => {
-      let itemDate = x.tglIso || new Date().toISOString().split('T')[0];
-      if (itemDate !== targetTanggalPilihan) return; 
-      if(x.tipe === 'penjualan' && x.status !== 'VOID') {
-        let subtotalVal = parseInt(x.subtotal, 10) || 0; 
-        if(x.isMamaProduct) { if(x.metode === 'Cash') cashMamah += subtotalVal; else qrisMamah += subtotalVal; } 
-        else { if(x.metode === 'Cash') cashAyam += subtotalVal; else qrisAyam += subtotalVal; }
-      } else if(x.tipe === 'kas') {
-        let nominalVal = parseInt(x.nominal, 10) || 0; 
-        if(x.jenis === 'Tarik Tunai') tarikTunai += nominalVal; else belanja += nominalVal; 
+  // Helpers untuk Cash Awal Hari per tanggal (backward-compatible localStorage)
+  function keyCashAwal(tglIso) { return 'cash_awal_hari_' + tglIso; }
+  function keyModalLaci(tglIso) { return 'modal_laci_' + tglIso; }
+  function keyCashReal(tglIso) { return 'cash_real_' + tglIso; }
+  function keyKetSelisih(tglIso) { return 'ket_selisih_' + tglIso; }
+  function getCashAwalHari(tglIso) { const v = localStorage.getItem(keyCashAwal(tglIso)); return (v === null || v === '') ? null : parseNominalKas(v); }
+  function setCashAwalHari(tglIso, val) { if(val===null || val==='' || isNaN(val)) localStorage.removeItem(keyCashAwal(tglIso)); else localStorage.setItem(keyCashAwal(tglIso), String(val)); }
+  function getModalLaci(tglIso) { return parseNominalKas(localStorage.getItem(keyModalLaci(tglIso)) || document.getElementById('modalAwalInput')?.value || '0'); }
+  function setModalLaci(tglIso, val) { localStorage.setItem(keyModalLaci(tglIso), String(val)); }
+  function getCashRealVal(tglIso) { const v = localStorage.getItem(keyCashReal(tglIso)); return v === null || v === '' ? null : parseNominalKas(v); }
+  function setCashRealVal(tglIso, val) { if(val===null || val==='') localStorage.removeItem(keyCashReal(tglIso)); else localStorage.setItem(keyCashReal(tglIso), String(val)); }
+  // Blind Cash Count — STATE detection HANYA via snapshot, bukan cashReal
+  function hasSubmittedRekap(tglIso) { return localStorage.getItem('rekap_snapshot_' + tglIso) !== null; }
+
+  // ============================================================
+  //  WALLET KAS TOKO — SOT server + optimistic pending only
+  //  Saldo = SaldoAwal + CashAyam - Belanja - Tarik - Setoran + Adjustment
+  //  cashAwalHari TIDAK masuk wallet, Mamah/QRIS tidak masuk wallet
+  //  Optimistic hanya tambah queue pending yang BELUM tercermin di server
+  // ============================================================
+  const WALLET_CACHE_KEY = 'cache_wallet_server';
+  const WALLET_CACHE_TIME_KEY = 'cache_wallet_server_time';
+  const WALLET_PENDING_CONFIRM_KEY = 'cache_wallet_pending_confirm';
+  function getWalletServerCache(){ try{ var r=localStorage.getItem(WALLET_CACHE_KEY); return r?JSON.parse(r):null; }catch(e){ return null; } }
+  function setWalletServerCache(data){ try{ localStorage.setItem(WALLET_CACHE_KEY, JSON.stringify(data)); localStorage.setItem(WALLET_CACHE_TIME_KEY, new Date().toISOString()); }catch(e){} }
+  function getWalletPendingConfirm(){ try{ var r=localStorage.getItem(WALLET_PENDING_CONFIRM_KEY); return r?JSON.parse(r):[]; }catch(e){ return []; } }
+  function addWalletPendingConfirm(item){ try{ var a=getWalletPendingConfirm(); a.push(item); localStorage.setItem(WALLET_PENDING_CONFIRM_KEY, JSON.stringify(a)); }catch(e){} }
+  function clearWalletPendingConfirm(){ try{ localStorage.removeItem(WALLET_PENDING_CONFIRM_KEY); }catch(e){} }
+  function computeWalletPendingDelta(){
+    var delta = 0;
+    // --- Cash Ayam pending: sync_queue items yang masih di queue ---
+    try{
+      var qKasir = JSON.parse(localStorage.getItem('sync_queue')||'[]');
+      if(qKasir.length>0){
+        var pendingIds = {};
+        qKasir.forEach(function(r){ if(r && r.clientTxnId) pendingIds[r.clientTxnId]=true; });
+        // history per-item subtotal, but need nett per nota (diskon)
+        var history = JSON.parse(localStorage.getItem('rekap_hari_ini')||'[]');
+        // group pending history by clientTxnId to apply diskon per nota
+        var notaMap = {};
+        history.forEach(function(h){
+          if(h.tipe!=='penjualan' || h.status==='VOID' || !h.clientTxnId || !pendingIds[h.clientTxnId]) return;
+          if(h.isMamaProduct) return;
+          if((h.metode||'').toString().toLowerCase()!=='cash') return;
+          if(!notaMap[h.clientTxnId]) notaMap[h.clientTxnId] = { raw:0, diskonNilai: Number(h.diskonNilai)||0, diskonTipe: h.diskonTipe||'Rp' };
+          // use subtotal if available, else qty*harga approx; history has subtotal
+          notaMap[h.clientTxnId].raw += Number(h.subtotal)||0;
+          // keep latest diskon (all items same nota share same diskon)
+          if(h.diskonNilai!==undefined) { notaMap[h.clientTxnId].diskonNilai = Number(h.diskonNilai)||0; notaMap[h.clientTxnId].diskonTipe = h.diskonTipe||'Rp'; }
+        });
+        Object.keys(notaMap).forEach(function(id){
+          var n = notaMap[id];
+          var pot = (n.diskonTipe==='%' ? Math.round(n.raw * (n.diskonNilai/100)) : n.diskonNilai);
+          delta += Math.max(0, n.raw - pot);
+        });
       }
+    }catch(e){}
+    // --- Void pending: if a cash nota di-void, kurangi wallet (revert sale) ---
+    try{
+      var qVoid = JSON.parse(localStorage.getItem('sync_queue_void')||'[]');
+      if(qVoid.length>0){
+        var history2 = JSON.parse(localStorage.getItem('rekap_hari_ini')||'[]');
+        // history already marked VOID locally, but server saldo still includes sale
+        // so pending void should -cashAmount
+        qVoid.forEach(function(v){
+          if(!v.clientTxnId) return;
+          var notaRaw = 0, diskonNilai=0, diskonTipe='Rp', has=false;
+          history2.forEach(function(h){
+            if(h.clientTxnId===v.clientTxnId && h.tipe==='penjualan' && !h.isMamaProduct && (h.metode||'').toLowerCase()==='cash'){
+              // even if status VOID locally, we need original amount to subtract
+              // history entry still has subtotal even if status VOID, so count
+              notaRaw += Number(h.subtotal)||0;
+              diskonNilai = Number(h.diskonNilai)||diskonNilai;
+              diskonTipe = h.diskonTipe||diskonTipe;
+              has=true;
+            }
+          });
+          if(has){
+            var pot2 = (diskonTipe==='%' ? Math.round(notaRaw * (diskonNilai/100)) : diskonNilai);
+            var nett = Math.max(0, notaRaw - pot2);
+            delta -= nett;
+          }
+        });
+      }
+    }catch(e){}
+    // --- Pengeluaran pending (Belanja/Tarik/Setor/SaldoAwal/Adjustment) --- F = Metode
+    try{
+      var qBelanja = JSON.parse(localStorage.getItem('sync_queue_belanja')||'[]');
+      qBelanja.forEach(function(row){
+        var jenis = row.jenisKas || row.jenis || '';
+        var nominal = Number(row.nominal)||0;
+        var metode = (row.metodeKas || row.metode || '').toString().trim();
+        var isCash = (metode==='' || metode==='Cash Toko');
+        if(jenis==='Saldo Awal Wallet') delta += nominal;
+        else if(jenis==='Adjustment Wallet') delta += nominal; // bisa negatif
+        else if(jenis==='Belanja Operasional' || jenis==='Operasional'){ if(isCash) delta -= nominal; }
+        else if(jenis==='Tarik Tunai') delta -= nominal;
+        else if(jenis==='Setoran Owner') delta -= nominal;
+      });
+      // Pending confirm: sudah Sukses di server (queue di-shift) tapi cache belum refresh
+      var pendingConfirm = getWalletPendingConfirm();
+      pendingConfirm.forEach(function(row){
+        var jenis = row.jenisKas || row.jenis || '';
+        var nominal = Number(row.nominal)||0;
+        var metode = (row.metodeKas || row.metode || '').toString().trim();
+        var isCash = (metode==='' || metode==='Cash Toko');
+        if(jenis==='Saldo Awal Wallet') delta += nominal;
+        else if(jenis==='Adjustment Wallet') delta += nominal;
+        else if(jenis==='Belanja Operasional' || jenis==='Operasional'){ if(isCash) delta -= nominal; }
+        else if(jenis==='Tarik Tunai') delta -= nominal;
+        else if(jenis==='Setoran Owner') delta -= nominal;
+        // Cash Ayam via sync_queue already handled above, void via qVoid
+      });
+    }catch(e){}
+    return delta;
+  }
+  function getWalletOptimisticSaldo(){
+    var server = getWalletServerCache();
+    var base = server && typeof server.saldo==='number' ? server.saldo : 0;
+    var delta = computeWalletPendingDelta();
+    return { base: base, delta: delta, optimistic: base + delta, server: server };
+  }
+  function renderWalletKasToko(){
+    var wrap = document.getElementById('walletSaldoValue');
+    var helper = document.getElementById('walletHelper');
+    var statusEl = document.getElementById('walletStatusBadge');
+    if(!wrap) return;
+    var serverCache = getWalletServerCache();
+    var hasServer = !!serverCache;
+    var opt = getWalletOptimisticSaldo();
+    var saldoTampil = opt.optimistic;
+    if(!hasServer && opt.delta===0){
+      wrap.innerText = 'Memuat...';
+    } else {
+      wrap.innerText = 'Rp ' + Number(saldoTampil||0).toLocaleString('id-ID');
+    }
+    // Modal Kembalian & Bisa Disetor
+    var modal = getModalLaci(getLocalIsoDate());
+    // modal per hari, but wallet is global; use today's modal
+    var bisaDisetor = Math.max(0, saldoTampil - (Number(modal)||0));
+    var elBisa = document.getElementById('walletBisaDisetor');
+    if(elBisa) elBisa.innerText = 'Rp ' + Number(bisaDisetor||0).toLocaleString('id-ID');
+    var elModal = document.getElementById('walletModalKembalian');
+    if(elModal) elModal.innerText = 'Rp ' + Number(modal||0).toLocaleString('id-ID');
+    // status badge
+    if(statusEl){
+      if(!hasServer && (JSON.parse(localStorage.getItem('sync_queue')||'[]').length>0 || JSON.parse(localStorage.getItem('sync_queue_belanja')||'[]').length>0)){
+        statusEl.className='badge bg-warning text-dark extra-small';
+        statusEl.innerHTML='<i class="fas fa-triangle-exclamation me-1"></i>Menunggu sync';
+      } else if(!navigator.onLine && !hasServer){
+        statusEl.className='badge bg-secondary extra-small';
+        statusEl.innerHTML='<i class="fas fa-plug-circle-xmark me-1"></i>Offline';
+      } else if(opt.delta!==0){
+        statusEl.className='badge bg-warning text-dark extra-small';
+        statusEl.innerHTML='<i class="fas fa-triangle-exclamation me-1"></i>Estimasi lokal';
+      } else {
+        statusEl.className='badge bg-success extra-small';
+        statusEl.innerHTML='<i class="fas fa-check me-1"></i>Terkini';
+      }
+    }
+    // helper
+    if(helper){
+      if(!hasServer && opt.delta===0) helper.innerText='Memuat saldo dari server...';
+      else if(saldoTampil===0 && !hasServer) helper.innerText='Belum ada Saldo Awal. Owner perlu input Saldo Awal.';
+      else helper.innerText='Uang toko yang masih dipegang dan belum disetor.';
+    }
+    // owner-only controls visibility
+    var ownerWalletControls = document.getElementById('walletOwnerControls');
+    if(ownerWalletControls) ownerWalletControls.style.display = isOwnerAuthenticated ? 'block' : 'none';
+    var penyesuaianInfo = document.getElementById('walletPenyesuaianInfo');
+    if(penyesuaianInfo) penyesuaianInfo.style.display = isOwnerAuthenticated ? 'block' : 'none';
+    // also refresh rekap bisa disetor mirror if needed
+  }
+  function fetchWalletSaldo(){
+    var statusEl = document.getElementById('walletStatusBadge');
+    if(statusEl){ statusEl.className='badge bg-secondary extra-small'; statusEl.innerHTML='<i class="fas fa-spinner fa-spin me-1"></i>Memuat...'; }
+    fetch(API_URL + '?aksi=ambilWalletSaldo')
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        if(data && data.status==='ok'){
+          setWalletServerCache(data);
+          clearWalletPendingConfirm();
+          renderWalletKasToko();
+          // also refresh rekap hero bisa disetor after wallet sync
+          try{ hitungRekapHarian(); }catch(e){}
+        } else {
+          throw new Error('res not ok');
+        }
+      })
+      .catch(function(err){
+        // offline: use cache + pending
+        renderWalletKasToko();
+      });
+  }
+  function requestSaldoAwalWallet(){
+    if(!isOwnerAuthenticated) return Swal.fire('Akses Owner', 'Hanya owner boleh atur saldo awal.', 'warning');
+    var cache = getWalletServerCache();
+    if(cache && (cache.breakdown.saldoAwal||0)!==0){
+      Swal.fire('Saldo Awal Sudah Ada', 'Saldo awal sudah Rp '+(cache.breakdown.saldoAwal||0).toLocaleString('id-ID')+'. Gunakan Adjustment untuk koreksi.', 'info');
+      return;
+    }
+    Swal.fire({
+      title: 'Saldo Awal Wallet',
+      html: 'Masukkan total uang toko yang saat ini dipegang operasional (saldo awal).<br><small class="text-muted">Hanya boleh diisi sekali saat Wallet mulai digunakan.</small>',
+      input: 'text',
+      inputPlaceholder: 'Contoh: 2000000',
+      showCancelButton: true,
+      confirmButtonText: 'Simpan Saldo Awal',
+      inputValidator: function(v){ if(!v || parseNominalKas(v)<=0) return 'Masukkan nominal >0'; }
+    }).then(function(res){
+      if(!res.isConfirmed) return;
+      var nominal = parseNominalKas(res.value);
+      var clientTxnId = crypto.randomUUID ? crypto.randomUUID() : (Date.now()+'-'+Math.random().toString(36).substr(2,8));
+      // reuse Pengeluaran queue (Saldo Awal Wallet)
+      simpanKeHistoryLokal('kas', { jenis: 'Saldo Awal Wallet', nominal: nominal, clientTxnId: clientTxnId });
+      var q = JSON.parse(localStorage.getItem('sync_queue_belanja')||'[]');
+      localStorage.setItem('sync_queue_belanja', JSON.stringify(q.concat([{ clientTxnId: clientTxnId, tgl: new Date().toLocaleString('id-ID'), jenisKas: 'Saldo Awal Wallet', namaItem: 'Saldo Awal Wallet', nominal: nominal, keterangan: 'Saldo awal ditentukan owner' }])));
+      // optimistic render immediately
+      renderWalletKasToko();
+      hitungRekapHarian();
+      refreshHistoryLogUI();
+      attemptSync();
+      fetchWalletSaldo();
+      Swal.fire('Tersimpan', 'Saldo awal Rp '+nominal.toLocaleString('id-ID')+' akan sync ke server.', 'success');
     });
-    let wajibCash = modalAwal + cashAyam - belanja - tarikTunai; 
-    document.getElementById('rekapCashAyam').innerText = 'Rp ' + cashAyam.toLocaleString('id-ID'); 
-    document.getElementById('rekapQrisAyam').innerText = 'Rp ' + qrisAyam.toLocaleString('id-ID'); 
-    document.getElementById('rekapCashMamah').innerText = 'Rp ' + cashMamah.toLocaleString('id-ID'); 
-    document.getElementById('rekapQrisMamah').innerText = 'Rp ' + qrisMamah.toLocaleString('id-ID'); 
-    document.getElementById('rekapBelanja').innerText = 'Rp ' + belanja.toLocaleString('id-ID'); 
-    document.getElementById('rekapTarikTunai').innerText = 'Rp ' + tarikTunai.toLocaleString('id-ID'); 
-    document.getElementById('rekapWajibCash').innerText = 'Rp ' + wajibCash.toLocaleString('id-ID'); 
-    let pickDate = targetTanggalPilihan.split('-');
-    dataGlobalRekapKirim = { tanggal: pickDate.length === 3 ? `${pickDate[2]}/${pickDate[1]}/${pickDate[0]}` : "", modalAwal, cashAyam, qrisAyam, cashMamah, qrisMamah, belanja, tarikTunai, wajibCashLaci: wajibCash };
+  }
+  function requestAdjustmentWallet(){
+    if(!isOwnerAuthenticated) return Swal.fire('Akses Owner', 'Hanya owner boleh adjustment.', 'warning');
+    Swal.fire({
+      title: 'Adjustment Wallet',
+      html: '<div class="text-start extra-small mb-2">Nominal positif menambah saldo, negatif mengurangi.<br>Contoh: <code>100000</code> atau <code>-50000</code></div>',
+      input: 'text',
+      inputPlaceholder: '100000 atau -50000',
+      inputValue: '',
+      showCancelButton: true,
+      confirmButtonText: 'Simpan Adjustment'
+    }).then(function(res){
+      if(!res.isConfirmed) return;
+      var raw = (res.value||'').toString().replace(/[^0-9\-]/g,'');
+      var nominal = parseInt(raw,10);
+      if(isNaN(nominal) || nominal===0) return Swal.fire('Gagal','Nominal tidak valid','warning');
+      Swal.fire({
+        title: 'Alasan Adjustment',
+        input: 'text',
+        inputPlaceholder: 'Koreksi kas / selisih audit',
+        showCancelButton: true
+      }).then(function(res2){
+        if(!res2.isConfirmed) return;
+        var alasan = res2.value||'Adjustment owner';
+        var before = getWalletOptimisticSaldo().optimistic;
+        var clientTxnId = crypto.randomUUID ? crypto.randomUUID() : (Date.now()+'-'+Math.random().toString(36).substr(2,8));
+        simpanKeHistoryLokal('kas', { jenis: 'Adjustment Wallet', nominal: nominal, clientTxnId: clientTxnId, keterangan: alasan });
+        var q = JSON.parse(localStorage.getItem('sync_queue_belanja')||'[]');
+        localStorage.setItem('sync_queue_belanja', JSON.stringify(q.concat([{ clientTxnId: clientTxnId, tgl: new Date().toLocaleString('id-ID'), jenisKas: 'Adjustment Wallet', namaItem: 'Adjustment Wallet', nominal: nominal, keterangan: alasan + ' (sebelum Rp'+before.toLocaleString('id-ID')+')' }])));
+        renderWalletKasToko();
+        hitungRekapHarian();
+        refreshHistoryLogUI();
+        attemptSync();
+        fetchWalletSaldo();
+        Swal.fire('Tersimpan', 'Adjustment Rp '+nominal.toLocaleString('id-ID')+' ('+alasan+') akan sync.', 'success');
+      });
+    });
+  }
+  function requestSetorWallet(){
+    var opt = getWalletOptimisticSaldo();
+    if(opt.optimistic<=0) return Swal.fire('Saldo Kosong','Tidak ada saldo untuk disetor.','info');
+    Swal.fire({
+      title: 'Setor ke Owner',
+      html: 'Saldo saat ini <b>Rp '+opt.optimistic.toLocaleString('id-ID')+'</b><br><small class="text-muted">Masukkan nominal setor.</small>',
+      input: 'text',
+      inputPlaceholder: 'Contoh: 1000000',
+      showCancelButton: true,
+      didOpen: function(){ var inp=Swal.getInput(); if(inp) inp.addEventListener('input', function(){ formatNominalKas(inp); }); },
+      inputValidator: function(v){ var n=parseNominalKas(v); if(n<=0) return 'Nominal >0'; if(n>opt.optimistic) return 'Melebihi saldo Rp '+opt.optimistic.toLocaleString('id-ID'); }
+    }).then(function(res){
+      if(!res.isConfirmed) return;
+      var nominal = parseNominalKas(res.value);
+      var clientTxnId = crypto.randomUUID ? crypto.randomUUID() : (Date.now()+'-'+Math.random().toString(36).substr(2,8));
+      // reuse simpanKasOperasional path but via generic queue
+      simpanKeHistoryLokal('kas', { jenis: 'Setoran Owner', nominal: nominal, clientTxnId: clientTxnId });
+      var q = JSON.parse(localStorage.getItem('sync_queue_belanja')||'[]');
+      localStorage.setItem('sync_queue_belanja', JSON.stringify(q.concat([{ clientTxnId: clientTxnId, tgl: new Date().toLocaleString('id-ID'), jenisKas: 'Setoran Owner', namaItem: 'Setoran Owner', nominal: nominal, keterangan: 'Setor wallet' }])));
+      Swal.fire({ icon:'success', title:'Setoran Dicatat', text:'Rp '+nominal.toLocaleString('id-ID')+' akan sync.', timer:1500, showConfirmButton:false});
+      renderWalletKasToko();
+      hitungRekapHarian();
+      refreshHistoryLogUI();
+      attemptSync();
+      fetchWalletSaldo();
+    });
   }
 
+  function onRekapTanggalGanti() {
+    const tgl = document.getElementById('rekapDatePicker').value;
+    // load per-tanggal values
+    const ca = localStorage.getItem(keyCashAwal(tgl));
+    const ml = localStorage.getItem(keyModalLaci(tgl));
+    const cr = localStorage.getItem(keyCashReal(tgl));
+    const ket = localStorage.getItem(keyKetSelisih(tgl));
+    document.getElementById('cashAwalHariInput').value = (ca === null || ca === '') ? '' : Number(ca).toLocaleString('id-ID');
+    if (ml !== null) document.getElementById('modalAwalInput').value = Number(ml).toLocaleString('id-ID');
+    document.getElementById('cashRealInput').value = cr ? Number(cr).toLocaleString('id-ID') : '';
+    document.getElementById('keteranganSelisihInput').value = ket || '';
+    hitungRekapHarian();
+  }
+  function onCashAwalHariInput(el) { formatNominalKas(el); const tgl = document.getElementById('rekapDatePicker').value; const v = el.value.trim()==='' ? null : parseNominalKas(el.value); setCashAwalHari(tgl, v); hitungRekapHarian(); }
+  function onModalLaciInput(el) { formatNominalKas(el); const tgl = document.getElementById('rekapDatePicker').value; setModalLaci(tgl, parseNominalKas(el.value)); hitungRekapHarian(); try{ renderWalletKasToko(); }catch(e){} }
+  function onCashRealInput(el) { formatNominalKas(el); const tgl = document.getElementById('rekapDatePicker').value; const v = el.value.trim()==='' ? '' : parseNominalKas(el.value); setCashRealVal(tgl, v===''? null : v); const ketEl = document.getElementById('keteranganSelisihInput'); if(ketEl) localStorage.setItem(keyKetSelisih(tgl), ketEl.value); hitungRekapHarian(); }
+
+  function hitungRekapHarian() {
+    let history = JSON.parse(localStorage.getItem('rekap_hari_ini') || '[]');
+    let targetTanggalPilihan = document.getElementById('rekapDatePicker').value;
+    // Cash Awal Hari = fisik saat buka (per tanggal), Modal Laci = target float
+    let cashAwalHari = getCashAwalHari(targetTanggalPilihan);
+    let modalLaciTarget = parseNominalKas(document.getElementById('modalAwalInput')?.value || '0');
+    // persist modal laci per tanggal for morning catch-up
+    if(targetTanggalPilihan) setModalLaci(targetTanggalPilihan, modalLaciTarget);
+    let cashAyam = 0, qrisAyam = 0, cashMamah = 0, qrisMamah = 0, belanja = 0, tarikTunai = 0, setoranOwner = 0;
+    history.forEach((x) => {
+      let itemDate = x.tglIso || getLocalIsoDate();
+      if (itemDate !== targetTanggalPilihan) return;
+      if(x.tipe === 'penjualan' && x.status !== 'VOID') {
+        let subtotalVal = parseInt(x.subtotal, 10) || 0;
+        if(x.isMamaProduct) { if(x.metode === 'Cash') cashMamah += subtotalVal; else qrisMamah += subtotalVal; }
+        else { if(x.metode === 'Cash') cashAyam += subtotalVal; else qrisAyam += subtotalVal; }
+      } else if(x.tipe === 'kas') {
+        let nominalVal = parseInt(x.nominal, 10) || 0;
+        if(x.jenis === 'Saldo Awal Wallet' || x.jenis === 'Adjustment Wallet') {
+          // tidak masuk rekap harian (bukan pengeluaran toko) — hanya untuk Wallet kas toko
+        } else if(x.jenis === 'Tarik Tunai') tarikTunai += nominalVal;
+        else if(x.jenis === 'Setoran Owner') setoranOwner += nominalVal;
+        else belanja += nominalVal;
+      }
+    });
+    // cashMamah dipisah (Uang Dipisah) → tidak masuk drawer Ayam
+    // F2: jika cashAwalHari belum diinput (null), jangan anggap 0 — status BELUM LENGKAP
+    let cashTeoritisSebelumSetoran, targetSetoran, belumDisetor, cashTeoritisAkhir, wajibCash;
+    if (cashAwalHari === null) {
+      cashTeoritisSebelumSetoran = null;
+      targetSetoran = null;
+      belumDisetor = null;
+      cashTeoritisAkhir = null;
+      wajibCash = null;
+    } else {
+      cashTeoritisSebelumSetoran = cashAwalHari + cashAyam - belanja - tarikTunai;
+      targetSetoran = Math.max(0, cashTeoritisSebelumSetoran - modalLaciTarget);
+      belumDisetor = Math.max(0, targetSetoran - setoranOwner);
+      cashTeoritisAkhir = cashTeoritisSebelumSetoran - setoranOwner;
+      wajibCash = cashTeoritisAkhir;
+    }
+    // Cash Real & selisih
+    let cashRealRaw = getCashRealVal(targetTanggalPilihan);
+    let cashReal = cashRealRaw;
+    let selisih = null;
+    let status = 'BELUM LENGKAP';
+    if (cashAwalHari === null) {
+      status = 'BELUM LENGKAP';
+      selisih = null;
+    } else if (cashReal === null) {
+      status = 'BELUM REKONSILIASI';
+      selisih = null;
+    } else {
+      // cashTeoritisAkhir pasti not null di sini karena cashAwal not null
+      selisih = cashReal - cashTeoritisAkhir;
+      if (selisih === 0) status = 'BALANCE';
+      else if (selisih < 0) status = 'SHORT';
+      else status = 'OVER';
+    }
+    // persist keteranganSelisih per tanggal
+    let ketSelisih = document.getElementById('keteranganSelisihInput')?.value || localStorage.getItem(keyKetSelisih(targetTanggalPilihan)) || '';
+    document.getElementById('rekapCashAyam').innerText = 'Rp ' + cashAyam.toLocaleString('id-ID');
+    document.getElementById('rekapQrisAyam').innerText = 'Rp ' + qrisAyam.toLocaleString('id-ID');
+    document.getElementById('rekapCashMamah').innerText = 'Rp ' + cashMamah.toLocaleString('id-ID');
+    document.getElementById('rekapQrisMamah').innerText = 'Rp ' + qrisMamah.toLocaleString('id-ID');
+    document.getElementById('rekapBelanja').innerText = 'Rp ' + belanja.toLocaleString('id-ID');
+    document.getElementById('rekapTarikTunai').innerText = 'Rp ' + tarikTunai.toLocaleString('id-ID');
+    const elSetoran = document.getElementById('rekapSetoranOwner'); if(elSetoran) elSetoran.innerText = 'Rp ' + setoranOwner.toLocaleString('id-ID');
+    const fmtCash = (v) => (v === null || v === undefined) ? '—' : 'Rp ' + Number(v).toLocaleString('id-ID');
+    // Blind Cash Count — STATE B hanya jika snapshot submit ada
+    const hasSubmitted = hasSubmittedRekap(targetTanggalPilihan);
+    const elHeroWrap = document.getElementById('rekapHeroWrap');
+    const elHeroBreakdown = document.getElementById('rekapHeroBreakdown');
+    const elCheckWrap = document.getElementById('rekapCheckWrap');
+    const elBlindHero = document.getElementById('rekapBlindHelperHero');
+    const elBlindCheck = document.getElementById('rekapBlindHelperCheck');
+    const elCheckTeoritisRow = document.getElementById('rekapCheckTeoritisRow');
+    const fmtBlind = '—';
+    if (!hasSubmitted) {
+      // STATE A — BELUM SUBMIT: sembunyikan expected cash, target, belum setor, selisih, status
+      // PENJUALAN & UANG KELUAR tetap terlihat (di-render sebelum cabang ini)
+      if (elHeroWrap) elHeroWrap.classList.add('is-blind');
+      if (elCheckWrap) elCheckWrap.classList.add('is-blind');
+      if (elBlindHero) elBlindHero.style.display = 'block';
+      if (elBlindCheck) elBlindCheck.style.display = 'block';
+      const elWajib = document.getElementById('rekapWajibCash'); if(elWajib) elWajib.innerText = fmtBlind;
+      const elCashFisik = document.getElementById('rekapCashFisik'); if(elCashFisik) elCashFisik.innerText = fmtBlind;
+      const elTarget = document.getElementById('rekapTargetSetoran'); if(elTarget) elTarget.innerText = fmtBlind;
+      const elSudah = document.getElementById('rekapSudahSetor'); if(elSudah) elSudah.innerText = fmtBlind;
+      const elBelum = document.getElementById('rekapBelumDisetor'); if(elBelum) elBelum.innerText = fmtBlind;
+      const elSisa = document.getElementById('rekapSisaCash'); if(elSisa) elSisa.innerText = fmtBlind;
+      const elCheck = document.getElementById('rekapCheckTeoritis'); if(elCheck) elCheck.innerText = fmtBlind;
+      const elSelisih = document.getElementById('rekapSelisih'); if(elSelisih) elSelisih.innerText = fmtBlind;
+      const elStatus = document.getElementById('rekapStatus'); if(elStatus){ elStatus.innerText = 'TERKUNCI'; elStatus.className = 'badge bg-secondary'; }
+      const box = document.getElementById('rekapSelisihBox'); if(box){ box.style.background = '#f8f9fa'; }
+    } else {
+      // STATE B — SUDAH SUBMIT: tampilkan semua hasil (offline-first, tidak tunggu server)
+      if (elHeroWrap) elHeroWrap.classList.remove('is-blind');
+      if (elCheckWrap) elCheckWrap.classList.remove('is-blind');
+      if (elBlindHero) elBlindHero.style.display = 'none';
+      if (elBlindCheck) elBlindCheck.style.display = 'none';
+      if (elCheckTeoritisRow) elCheckTeoritisRow.style.display = '';
+      const elCashFisik = document.getElementById('rekapCashFisik'); if(elCashFisik) elCashFisik.innerText = fmtCash(cashTeoritisSebelumSetoran);
+      const elTarget = document.getElementById('rekapTargetSetoran'); if(elTarget) elTarget.innerText = fmtCash(targetSetoran);
+      const elSudah = document.getElementById('rekapSudahSetor'); if(elSudah) elSudah.innerText = 'Rp ' + setoranOwner.toLocaleString('id-ID');
+      const elBelum = document.getElementById('rekapBelumDisetor'); if(elBelum) elBelum.innerText = fmtCash(belumDisetor);
+      document.getElementById('rekapWajibCash').innerText = fmtCash(wajibCash);
+      const elSisa = document.getElementById('rekapSisaCash'); if(elSisa) elSisa.innerText = fmtCash(cashTeoritisAkhir);
+      const displayStatus = status==='BALANCE' ? '✓ Cocok' : status==='SHORT' ? '⚠ Kurang' : status==='OVER' ? '⚠ Lebih' : status==='BELUM REKONSILIASI' ? 'BELUM DICEK' : status==='BELUM LENGKAP' ? 'BELUM LENGKAP' : status;
+      const elSelisih = document.getElementById('rekapSelisih'); if(elSelisih) elSelisih.innerText = (selisih===null ? '—' : (selisih>0?'+ Lebih Rp ' : selisih<0?'- Kurang Rp ' : '') + Math.abs(selisih||0).toLocaleString('id-ID'));
+      const elStatus = document.getElementById('rekapStatus'); if(elStatus){ elStatus.innerText = displayStatus; elStatus.className = 'badge ' + (status==='BALANCE'?'bg-success': status==='SHORT'?'bg-danger': status==='OVER'?'bg-warning text-dark':'bg-secondary'); }
+      const box = document.getElementById('rekapSelisihBox'); if(box){ box.style.background = status==='BALANCE'?'#d4edda': status==='SHORT'?'#f8d7da': status==='OVER'?'#fff3cd':'#f8f9fa'; }
+      const elCheck = document.getElementById('rekapCheckTeoritis'); if(elCheck) elCheck.innerText = fmtCash(cashTeoritisAkhir);
+    }
+    const emptyEl = document.getElementById('rekapEmptyState'); if(emptyEl){
+      const hasTransaksi = (cashAyam+qrisAyam+cashMamah+qrisMamah+belanja+tarikTunai+setoranOwner) > 0;
+      const hasCashAwal = cashAwalHari !== null;
+      emptyEl.style.display = (!hasTransaksi && !hasCashAwal) ? 'block' : 'none';
+    }
+    let pickDate = targetTanggalPilihan.split('-');
+    // simpan keteranganSelisih live
+    if(targetTanggalPilihan) localStorage.setItem(keyKetSelisih(targetTanggalPilihan), ketSelisih);
+    dataGlobalRekapKirim = { tanggal: pickDate.length === 3 ? `${pickDate[2]}/${pickDate[1]}/${pickDate[0]}` : "", modalAwal: modalLaciTarget, modalLaciTarget, cashAwalHari, cashAyam, qrisAyam, cashMamah, qrisMamah, belanja, tarikTunai, setoranOwner, cashTeoritisSebelumSetoran, cashFisikSebelumSetoran: cashTeoritisSebelumSetoran, targetSetoran, belumDisetor, cashTeoritisAkhir, sisaCashDiLaci: cashTeoritisAkhir, wajibCashLaci: wajibCash, cashReal, selisih, status, keteranganSelisih: ketSelisih, timestampTutup: new Date().toISOString() };
+  }
+
+  function formatNominalKas(el) {
+    let v = (el.value || '').toString().replace(/[^0-9]/g, '');
+    if (v === '') { el.value = ''; return; }
+    // hapus leading zero, format ribuan id-ID (titik)
+    v = String(parseInt(v, 10) || 0);
+    el.value = Number(v).toLocaleString('id-ID');
+  }
+  function parseNominalKas(str) {
+    return parseInt((str || '').toString().replace(/[^0-9]/g, ''), 10) || 0;
+  }
   function simpanKasOperasional() { 
     const jenis = document.getElementById('jenisKas').value; 
     const nama = document.getElementById('namaItemKas') ? document.getElementById('namaItemKas').value : "Kas Toko"; 
-    const nominal = parseInt(document.getElementById('nominalKas').value, 10) || 0; 
+    const nominal = parseNominalKas(document.getElementById('nominalKas').value); 
     if (!nama || nominal <= 0) { Swal.fire('Peringatan', 'Lengkapi pengeluaran!', 'warning'); return; } 
-    simpanKeHistoryLokal('kas', { jenis: jenis, nominal: nominal }); 
+    const clientTxnId = crypto.randomUUID ? crypto.randomUUID() : (Date.now() + "-" + Math.random().toString(36).substr(2,8));
+    var metodeKas = (document.getElementById('metodeKas')?.value || 'Cash Toko');
+    if(jenis!=='Belanja Operasional' && jenis!=='Operasional') metodeKas = 'Cash Toko';
+    // Setoran Owner butuh idempotency wajib — pakai clientTxnId + Processed_Request di GAS (seperti penjualan)
+    simpanKeHistoryLokal('kas', { jenis: jenis, nominal: nominal, clientTxnId: clientTxnId, metodeKas: metodeKas }); 
     const queueBelanja = JSON.parse(localStorage.getItem('sync_queue_belanja') || '[]'); 
-    localStorage.setItem('sync_queue_belanja', JSON.stringify([...queueBelanja, { tgl: new Date().toLocaleString('id-ID'), jenisKas: jenis, namaItem: nama, nominal: nominal, keterangan: document.getElementById('ketKas').value }])); 
+    localStorage.setItem('sync_queue_belanja', JSON.stringify([...queueBelanja, { clientTxnId: clientTxnId, tgl: new Date().toLocaleString('id-ID'), jenisKas: jenis, namaItem: nama, nominal: nominal, keterangan: document.getElementById('ketKas').value, metodeKas: metodeKas, metode: metodeKas }])); 
     Swal.fire({ icon: 'success', title: 'Kas Tercatat!', timer: 1000, showConfirmButton: false }); 
     document.getElementById('namaItemKas').value = ''; document.getElementById('nominalKas').value = ''; document.getElementById('ketKas').value = ''; 
+    hitungRekapHarian();
+    refreshHistoryLogUI();
+    try{ renderWalletKasToko(); }catch(e){}
     attemptSync(); 
   }
 
@@ -866,8 +1570,9 @@ const clientTxnId = crypto.randomUUID
     const qVoid = JSON.parse(localStorage.getItem('sync_queue_void') || '[]');
     const qOpr = JSON.parse(localStorage.getItem('sync_queue_opr') || '[]');
     const qBelanja = JSON.parse(localStorage.getItem('sync_queue_belanja') || '[]');
+    const qRekap = JSON.parse(localStorage.getItem('sync_queue_rekap') || '[]');
 
-    if(qKasir.length === 0 && qVoid.length === 0 && qOpr.length === 0 && qBelanja.length === 0) {
+    if(qKasir.length === 0 && qVoid.length === 0 && qOpr.length === 0 && qBelanja.length === 0 && qRekap.length === 0) {
       if(statusEl) { statusEl.innerText = "Online"; statusEl.className = "badge bg-success extra-small"; }
       return;
     }
@@ -916,6 +1621,7 @@ const clientTxnId = crypto.randomUUID
 
           attemptSync();
           refreshHistoryLogUI();
+          try{ fetchWalletSaldo(); }catch(e){}
         } else {
           console.log("Sync ditolak server, item tetap di antrian untuk dicoba lagi:", res);
           if (statusEl) { statusEl.innerText = "Gagal Sync, akan dicoba lagi"; statusEl.className = "badge bg-danger extra-small"; }
@@ -953,14 +1659,40 @@ const clientTxnId = crypto.randomUUID
           q.shift();
           localStorage.setItem('sync_queue_void', JSON.stringify(q));
           isSyncing = false;
+          try{ fetchWalletSaldo(); }catch(e){}
           attemptSync();
           loadStokAyam();
         })
         .catch((err) => { console.log("Sync void error, akan dicoba lagi: ", err); isSyncing = false; });
     } else if (qOpr.length > 0) {
-      fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'simpanDapur', payload: qOpr[0] }) }).then(res=>res.json()).then(()=>{ var q=JSON.parse(localStorage.getItem('sync_queue_opr')); q.shift(); localStorage.setItem('sync_queue_opr', JSON.stringify(q)); isSyncing = false; attemptSync(); }).catch(()=>isSyncing=false);
+      fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'simpanDapur', payload: qOpr[0] }) }).then(res=>res.json()).then(()=>{ var q=JSON.parse(localStorage.getItem('sync_queue_opr')); q.shift(); localStorage.setItem('sync_queue_opr', JSON.stringify(q)); isSyncing = false; attemptSync(); loadRingkasanDapurHariIni(); loadLogDapurKasir(); loadStokAyam(); }).catch(()=>isSyncing=false);
     } else if (qBelanja.length > 0) { 
-      fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'simpanKas', payload: qBelanja[0] }) }).then(res=>res.json()).then(()=>{ var q=JSON.parse(localStorage.getItem('sync_queue_belanja')); q.shift(); localStorage.setItem('sync_queue_belanja', JSON.stringify(q)); isSyncing = false; attemptSync(); }).catch(()=>isSyncing=false);
+      fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'simpanKas', payload: qBelanja[0] }) }).then(res=>res.json()).then(function(res){ if(res && res.status==="Sukses"){ var q=JSON.parse(localStorage.getItem('sync_queue_belanja')); var justSynced = q[0]; if(justSynced) addWalletPendingConfirm(justSynced); q.shift(); localStorage.setItem('sync_queue_belanja', JSON.stringify(q)); try{ fetchWalletSaldo(); }catch(e){} } else { console.log("simpanKas gagal, tetap di queue untuk retry", res); } isSyncing = false; attemptSync(); }).catch(function(){ isSyncing=false; });
+    } else if (qRekap.length > 0) {
+      const item = qRekap[0];
+      fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'rekapGsheet', payload: item.payload }) }).then(res=>res.json()).then((res)=>{
+        let hasilStr = (res && res.hasil) ? res.hasil.toString() : "";
+        let isSudahPernah = hasilStr.indexOf('sudah pernah') !== -1;
+        let isFinalized = hasilStr.indexOf('finalized from auto snapshot') !== -1;
+        let isSudahDitutup = hasilStr.indexOf('sudah ditutup') !== -1;
+        let isGagal = hasilStr.indexOf('Gagal:') === 0;
+        // Sukses: outer Sukses + hasil tidak Gagal, atau idempotent/finalized
+        if(res && res.status==='Sukses' && !isGagal){
+          var q=JSON.parse(localStorage.getItem('sync_queue_rekap') || '[]'); q.shift(); localStorage.setItem('sync_queue_rekap', JSON.stringify(q));
+          Swal.fire({ icon:'success', title:'Laporan Terkirim', text: hasilStr || 'Sukses', timer:1500, showConfirmButton:false });
+        } else if(isSudahPernah || isFinalized){
+          var q=JSON.parse(localStorage.getItem('sync_queue_rekap') || '[]'); q.shift(); localStorage.setItem('sync_queue_rekap', JSON.stringify(q));
+          if(isFinalized) Swal.fire({ icon:'success', title:'Laporan Difinalisasi', text:'Snapshot AUTO berhasil difinalisasi', timer:1500, showConfirmButton:false });
+        } else if(isSudahDitutup){
+          // CASE D: laporan sudah manual final dengan uuid berbeda → jangan retry forever, hapus dan info
+          var q=JSON.parse(localStorage.getItem('sync_queue_rekap') || '[]'); q.shift(); localStorage.setItem('sync_queue_rekap', JSON.stringify(q));
+          Swal.fire({ icon:'error', title:'Sudah Ditutup', text: hasilStr });
+        } else {
+          console.log('Rekap ditolak, tetap di queue untuk retry', res);
+          if(isGagal) Swal.fire({ icon:'error', title:'Gagal', text: hasilStr });
+        }
+        isSyncing = false; attemptSync();
+      }).catch(()=>{ isSyncing=false; });
     } 
   }
 
@@ -972,19 +1704,99 @@ const clientTxnId = crypto.randomUUID
     localStorage.setItem('sync_queue_opr', JSON.stringify([...queueOpr, { tgl: new Date().toLocaleString('id-ID'), jenisAktivitas: jenis, qty: qty, minyakUsed: parseFloat(document.getElementById('minyakAyam').value) || 0, keterangan: document.getElementById('ketAyam').value }])); 
     Swal.fire({ icon: 'success', title: 'Tercatat', timer: 1000, showConfirmButton: false }); 
     document.getElementById('qtyAyam').value = ''; document.getElementById('minyakAyam').value = ''; document.getElementById('ketAyam').value = ''; 
-    attemptSync(); setTimeout(loadStokAyam, 1500); setTimeout(loadRingkasanDapurHariIni, 1500);
+    // Realtime monitoring: langsung render pending di list tanpa tunggu server
+    try {
+      const cacheRaw = localStorage.getItem('cache_ringkasan_dapur');
+      if (cacheRaw) {
+        const cache = JSON.parse(cacheRaw);
+        renderKasirLogDapurGabungan(cache.data, true, cache.waktu);
+      } else {
+        renderKasirLogDapurGabungan({ daftarAktivitas: [], periodeLabel: new Date().toLocaleDateString('id-ID') }, true, null);
+      }
+    } catch(e) {}
+    attemptSync(); setTimeout(loadStokAyam, 1500); setTimeout(loadRingkasanDapurHariIni, 1500); setTimeout(loadLogDapurKasir, 1500);
   }
 
   function hitungKembalian() { const metode = document.getElementById('metodeBayar').value; if (metode !== 'Cash') { document.getElementById('uangKembalian').innerText = "Metode: Non-Tunai"; return; } const uangBayar = parseInt(document.getElementById('uangBayar').value, 10) || 0; if (bypassModeActive) { document.getElementById('uangKembalian').innerText = "Bypass Aktif"; return; } const diskonInputVal = parseInt(document.getElementById('diskonNotaInput').value, 10) || 0; let nominalPotongan = (diskonTipe === 'Rp') ? diskonInputVal : Math.round(totalBelanjaGlobal * (diskonInputVal / 100)); const totalAkhirSetelahDiskon = Math.max(0, totalBelanjaGlobal - nominalPotongan); const kembalian = uangBayar - totalAkhirSetelahDiskon; document.getElementById('uangKembalian').innerText = kembalian >= 0 ? 'Kembali: Rp ' + kembalian.toLocaleString('id-ID') : 'Kurang: Rp ' + Math.abs(kembalian).toLocaleString('id-ID'); }
-  function kirimRekapKeGSheet() { fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'rekapGsheet', payload: dataGlobalRekapKirim }) }).then(res=>res.json()).then(res=>{ Swal.fire('Berhasil!', res.hasil, 'success'); }); }
+  function kirimRekapKeGSheet() { // legacy, tetap dipakai, tapi simpanTutupToko yang baru akan pakai queue
+    // pastikan hitung terbaru sebelum kirim
+    hitungRekapHarian();
+    if(!dataGlobalRekapKirim.tanggal) return Swal.fire('Gagal', 'Laporan kosong!', 'error');
+    fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'rekapGsheet', payload: dataGlobalRekapKirim }) }).then(res=>res.json()).then(res=>{ Swal.fire('Berhasil!', res.hasil, 'success'); }); 
+  }
+  function simpanTutupToko() {
+    hitungRekapHarian();
+    if(!dataGlobalRekapKirim.tanggal) return Swal.fire('Gagal', 'Laporan kosong!', 'error');
+    // validasi Cash Awal & Cash Real
+    const tglIso = document.getElementById('rekapDatePicker').value;
+    const caEl = document.getElementById('cashAwalHariInput');
+    if(!caEl || parseNominalKas(caEl.value)===0 && (getCashAwalHari(tglIso)===0)) {
+      // tidak wajib block, tapi warning
+      console.log('Cash Awal Hari masih 0 — pastikan sudah hitung fisik pagi');
+    }
+    // clientTxnId untuk idempotency close report
+    const clientTxnId = crypto.randomUUID ? crypto.randomUUID() : (Date.now() + "-" + Math.random().toString(36).substr(2,8));
+    dataGlobalRekapKirim.clientTxnId = clientTxnId;
+    dataGlobalRekapKirim.timestampTutup = new Date().toISOString();
+    // simpan keterangan selisih live
+    const ketEl = document.getElementById('keteranganSelisihInput');
+    if(ketEl) { dataGlobalRekapKirim.keteranganSelisih = ketEl.value; localStorage.setItem(keyKetSelisih(tglIso), ketEl.value); }
+    // queue offline-first
+    const qRekap = JSON.parse(localStorage.getItem('sync_queue_rekap') || '[]');
+    localStorage.setItem('sync_queue_rekap', JSON.stringify([...qRekap, { clientTxnId: clientTxnId, payload: Object.assign({}, dataGlobalRekapKirim) }]));
+    // also save local snapshot for morning catch-up check — INI penentu STATE B (Blind Cash Count)
+    localStorage.setItem('rekap_snapshot_' + tglIso, JSON.stringify(dataGlobalRekapKirim));
+    // langsung buka STATE B tanpa tunggu server (offline-first)
+    hitungRekapHarian();
+    Swal.fire({ icon: 'success', title: 'Tutup Toko Disimpan', text: 'Rekapan tersimpan. Akan sync ke Sheet saat online.', timer: 1500, showConfirmButton: false });
+    attemptSync();
+  }
 
-  window.addEventListener('online', attemptSync);
+  window.addEventListener('online', function(){ attemptSync(); try{ fetchWalletSaldo(); }catch(e){} });
   // PENTING: dengarkan juga event 'offline' supaya badge status langsung
   // berubah SAAT ITU JUGA ketika koneksi putus, bukan menunggu sampai
   // interval 20 detik berikutnya (lihat catatan di attemptSync()).
   window.addEventListener('offline', attemptSync);
-  setInterval(attemptSync, 20000);
+  setInterval(function(){ attemptSync(); try{ if(navigator.onLine && !isSyncing) fetchWalletSaldo(); }catch(e){} }, 60000);
   handleAktivitasDapurChange('Goreng Ayam');
   loadMenuDariSheets();
   attemptSync();
+  // Wallet: SOT server + optimistic
+  try{ renderWalletKasToko(); fetchWalletSaldo(); }catch(e){}
+  // Inisialisasi log dapur kasir (hari ini) — jangan tunggu klik tab Dapur dulu
+  setTimeout(loadLogDapurKasir, 800);
+  // Set default picker owner ke hari ini agar siap pakai
+  const pickerInit = document.getElementById('kasirLogTanggalPicker');
+  if (pickerInit && !pickerInit.value) pickerInit.value = getLocalIsoDate();
+  // Init rekap per-tanggal (Cash Awal Hari & Modal Laci per hari) dan morning catch-up
+  setTimeout(function(){
+    const tgl = document.getElementById('rekapDatePicker')?.value;
+    if(tgl){
+      const ca = localStorage.getItem(keyCashAwal(tgl));
+      const ml = localStorage.getItem(keyModalLaci(tgl));
+      const cr = localStorage.getItem(keyCashReal(tgl));
+      const ket = localStorage.getItem(keyKetSelisih(tgl));
+      const elCa = document.getElementById('cashAwalHariInput'); if(elCa && ca!==null) elCa.value = Number(ca).toLocaleString('id-ID');
+      const elMl = document.getElementById('modalAwalInput'); if(elMl && ml!==null) elMl.value = Number(ml).toLocaleString('id-ID');
+      const elCr = document.getElementById('cashRealInput'); if(elCr && cr!==null) elCr.value = Number(cr).toLocaleString('id-ID');
+      const elKet = document.getElementById('keteranganSelisihInput'); if(elKet && ket!==null) elKet.value = ket;
+      hitungRekapHarian();
+    }
+    // Morning catch-up: jika laporan kemarin belum ada snapshot, buat snapshot lokal (backend juga handle via trigger)
+    try{
+      const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+      const yIso = getLocalIsoDate(yesterday);
+      if(!localStorage.getItem('rekap_snapshot_' + yIso)){
+        console.log('Morning catch-up: snapshot kemarin belum ada, akan diisi saat rekap hari itu dibuka');
+      }
+      // panggil backend catch-up jika ada endpoint (non-blocking)
+      fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'morningCatchUp' }) }).catch(()=>{});
+    }catch(e){}
+  }, 1000);
+  // Live save keterangan selisih
+  document.getElementById('keteranganSelisihInput')?.addEventListener('input', function(){
+    const tgl = document.getElementById('rekapDatePicker').value;
+    localStorage.setItem(keyKetSelisih(tgl), this.value);
+    hitungRekapHarian();
+  });
 
