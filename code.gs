@@ -576,6 +576,22 @@ function simpanLogOperasional(logData) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheetLogStok = ss.getSheetByName("Log_Stok_Ayam");
     if (!sheetLogStok) return "Error: Tab Log_Stok_Ayam tidak ditemukan!";
+    // IDEMPOTENCY dapur (kasus double Goreng Ayam 23/09/2026): kasir bisa
+    // menekan Simpan 2x / retry saat respons timeout. Pola sama seperti
+    // simpanPengeluaranToko — tolak clientTxnId yang sudah tercatat di
+    // Processed_Request, catat setelah tulis berhasil.
+    var sheetProcessed = ss.getSheetByName("Processed_Request");
+    if (logData.clientTxnId && sheetProcessed) {
+      var lastRowReq = sheetProcessed.getLastRow();
+      if (lastRowReq > 1) {
+        var dataProcessed = sheetProcessed.getRange(2, 1, lastRowReq - 1, 1).getValues();
+        for (var r = 0; r < dataProcessed.length; r++) {
+          if (dataProcessed[r][0] && dataProcessed[r][0].toString() === logData.clientTxnId.toString()) {
+            return "Sukses (sudah pernah diproses)";
+          }
+        }
+      }
+    }
     // TIMESTAMP SOURCE OF TRUTH: waktu SERVER saat fungsi ini dieksekusi di GAS,
     // bukan parsing string logData.tgl dari klien yang formatnya bisa ambigu
     // (toLocaleString beda device/locale, rentan salah hari/bulan). Client
@@ -617,6 +633,14 @@ function simpanLogOperasional(logData) {
       sheetLogStok.appendRow([waktuAktivitas, "Ayam Rusak / Waste", "Etalase", -qty, logData.keterangan || "Waste Dapur"]);
       try { sheetLogStok.getRange(sheetLogStok.getLastRow(), 1).setNumberFormat("dd/MM/yyyy HH:mm:ss"); } catch(eFmt5) {}
       sesuaikanStokBarang(ss, "Ayam Matang (Etalase)", -qty);
+    }
+    // Tandai clientTxnId sebagai sudah diproses setelah tulis berhasil
+    if (logData.clientTxnId && sheetProcessed) {
+      try {
+        var lastRowP = getRealLastRow(sheetProcessed);
+        sheetProcessed.getRange(lastRowP + 1, 3, 1, 1).setNumberFormat("@");
+        sheetProcessed.getRange(lastRowP + 1, 1, 1, 3).setValues([[logData.clientTxnId, new Date(), Utilities.formatDate(waktuAktivitas, "Asia/Jakarta", "dd/MM/yyyy HH:mm:ss")]]);
+      } catch(eP) { console.log("Gagal catat Processed_Request dapur: " + eP.toString()); }
     }
     return "Sukses";
   } catch(e) { return e.toString(); } finally { lock.releaseLock(); }

@@ -1734,7 +1734,20 @@ const clientTxnId = crypto.randomUUID
         })
         .catch((err) => { console.log("Sync void error, akan dicoba lagi: ", err); isSyncing = false; });
     } else if (qOpr.length > 0) {
-      fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'simpanDapur', payload: qOpr[0] }) }).then(res=>res.json()).then(()=>{ var q=JSON.parse(localStorage.getItem('sync_queue_opr')); q.shift(); localStorage.setItem('sync_queue_opr', JSON.stringify(q)); isSyncing = false; attemptSync(); loadRingkasanDapurHariIni(); loadLogDapurKasir(); loadStokAyam(); }).catch(()=>isSyncing=false);
+      fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'simpanDapur', payload: qOpr[0] }) }).then(res=>res.json()).then((res)=>{
+        // Hanya hapus dari antrian kalau server benar-benar sukses (termasuk
+        // "sudah pernah diproses" = duplikat retry yang ditolak idempotency).
+        // Hasil "Error:..." = tulis gagal, biarkan di queue untuk retry.
+        var hasilStr = (res && res.hasil) ? res.hasil.toString() : "";
+        var ok = res && res.status === "Sukses" && hasilStr.indexOf("Error") !== 0;
+        if (ok) {
+          var q=JSON.parse(localStorage.getItem('sync_queue_opr')); q.shift(); localStorage.setItem('sync_queue_opr', JSON.stringify(q));
+          attemptSync(); loadRingkasanDapurHariIni(); loadLogDapurKasir(); loadStokAyam();
+        } else {
+          console.log("simpanDapur gagal, tetap di queue untuk retry", res);
+        }
+        isSyncing = false;
+      }).catch(()=>isSyncing=false);
     } else if (qBelanja.length > 0) { 
       fetch(API_URL, { method: 'POST', body: JSON.stringify({ aksi: 'simpanKas', payload: qBelanja[0] }) }).then(res=>res.json()).then(function(res){ if(res && res.status==="Sukses"){ var q=JSON.parse(localStorage.getItem('sync_queue_belanja')); var justSynced = q[0]; if(justSynced) addWalletPendingConfirm(justSynced); q.shift(); localStorage.setItem('sync_queue_belanja', JSON.stringify(q)); try{ fetchWalletSaldo(); }catch(e){} } else { console.log("simpanKas gagal, tetap di queue untuk retry", res); } isSyncing = false; attemptSync(); }).catch(function(){ isSyncing=false; });
     } else if (qRekap.length > 0) {
@@ -1765,25 +1778,51 @@ const clientTxnId = crypto.randomUUID
     } 
   }
 
+  // ANTI DOUBLE-INPUT dapur (kasus double Goreng Ayam 23/09/2026).
+  // Dua lapis: (1) tap ganda < 5 detik ditolak diam-diam; (2) entri IDENTIK
+  // dalam 15 menit minta konfirmasi — batch sah berikutnya tinggal tap Ya.
+  // Disimpan di localStorage supaya tetap berlaku walau halaman di-reload.
   function simpanStok() { 
     const jenis = document.getElementById('opsiAktivitas').value; 
     const qty = parseInt(document.getElementById('qtyAyam').value, 10) || 0; 
     if (qty <= 0) { Swal.fire('Error', 'Jumlah salah', 'warning'); return; } 
-    const queueOpr = JSON.parse(localStorage.getItem('sync_queue_opr') || '[]'); 
-    localStorage.setItem('sync_queue_opr', JSON.stringify([...queueOpr, { tgl: new Date().toLocaleString('id-ID'), jenisAktivitas: jenis, qty: qty, minyakUsed: parseFloat(document.getElementById('minyakAyam').value) || 0, keterangan: document.getElementById('ketAyam').value }])); 
-    Swal.fire({ icon: 'success', title: 'Tercatat', timer: 1000, showConfirmButton: false }); 
-    document.getElementById('qtyAyam').value = ''; document.getElementById('minyakAyam').value = ''; document.getElementById('ketAyam').value = ''; 
-    // Realtime monitoring: langsung render pending di list tanpa tunggu server
-    try {
-      const cacheRaw = localStorage.getItem('cache_ringkasan_dapur');
-      if (cacheRaw) {
-        const cache = JSON.parse(cacheRaw);
-        renderKasirLogDapurGabungan(cache.data, true, cache.waktu);
-      } else {
-        renderKasirLogDapurGabungan({ daftarAktivitas: [], periodeLabel: new Date().toLocaleDateString('id-ID') }, true, null);
-      }
-    } catch(e) {}
-    attemptSync(); setTimeout(loadStokAyam, 1500); setTimeout(loadRingkasanDapurHariIni, 1500); setTimeout(loadLogDapurKasir, 1500);
+    const minyakUsed = parseFloat(document.getElementById('minyakAyam').value) || 0;
+    const ket = document.getElementById('ketAyam').value;
+    const kunci = [jenis, qty, minyakUsed, ket].join('|');
+    const sekarang = Date.now();
+    let lastDapur = null;
+    try { lastDapur = JSON.parse(localStorage.getItem('last_dapur_submit') || 'null'); } catch(e) {}
+    if (lastDapur && lastDapur.kunci === kunci && (sekarang - lastDapur.waktu) < 5000) {
+      Swal.fire({ icon: 'info', title: 'Sudah tercatat', text: 'Tunggu sync selesai sebelum input lagi.', timer: 1500, showConfirmButton: false });
+      return;
+    }
+    const kirimStok = () => {
+      // clientTxnId: backend tolak duplikat via Processed_Request (lihat
+      // simpanLogOperasional di code.gs) — retry timeout tidak jadi double.
+      const clientTxnId = 'opr-' + sekarang.toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+      const queueOpr = JSON.parse(localStorage.getItem('sync_queue_opr') || '[]'); 
+      localStorage.setItem('sync_queue_opr', JSON.stringify([...queueOpr, { clientTxnId: clientTxnId, tgl: new Date().toLocaleString('id-ID'), jenisAktivitas: jenis, qty: qty, minyakUsed: minyakUsed, keterangan: ket }])); 
+      try { localStorage.setItem('last_dapur_submit', JSON.stringify({ kunci: kunci, waktu: Date.now() })); } catch(e) {}
+      Swal.fire({ icon: 'success', title: 'Tercatat', timer: 1000, showConfirmButton: false }); 
+      document.getElementById('qtyAyam').value = ''; document.getElementById('minyakAyam').value = ''; document.getElementById('ketAyam').value = ''; 
+      // Realtime monitoring: langsung render pending di list tanpa tunggu server
+      try {
+        const cacheRaw = localStorage.getItem('cache_ringkasan_dapur');
+        if (cacheRaw) {
+          const cache = JSON.parse(cacheRaw);
+          renderKasirLogDapurGabungan(cache.data, true, cache.waktu);
+        } else {
+          renderKasirLogDapurGabungan({ daftarAktivitas: [], periodeLabel: new Date().toLocaleDateString('id-ID') }, true, null);
+        }
+      } catch(e) {}
+      attemptSync(); setTimeout(loadStokAyam, 1500); setTimeout(loadRingkasanDapurHariIni, 1500); setTimeout(loadLogDapurKasir, 1500);
+    };
+    if (lastDapur && lastDapur.kunci === kunci && (sekarang - lastDapur.waktu) < 15 * 60 * 1000) {
+      const jamTerakhir = new Date(lastDapur.waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+      Swal.fire({ icon: 'question', title: 'Input identik?', text: 'Sama persis dengan input jam ' + jamTerakhir + '. Yakin input lagi?', showCancelButton: true, confirmButtonText: 'Ya, input lagi', cancelButtonText: 'Batal' }).then((r) => { if (r.isConfirmed) kirimStok(); });
+      return;
+    }
+    kirimStok();
   }
 
   function hitungKembalian() { const metode = document.getElementById('metodeBayar').value; if (metode !== 'Cash') { document.getElementById('uangKembalian').innerText = "Metode: Non-Tunai"; return; } const uangBayar = parseInt(document.getElementById('uangBayar').value, 10) || 0; if (bypassModeActive) { document.getElementById('uangKembalian').innerText = "Bypass Aktif"; return; } const diskonInputVal = parseInt(document.getElementById('diskonNotaInput').value, 10) || 0; let nominalPotongan = (diskonTipe === 'Rp') ? diskonInputVal : Math.round(totalBelanjaGlobal * (diskonInputVal / 100)); const totalAkhirSetelahDiskon = Math.max(0, totalBelanjaGlobal - nominalPotongan); const kembalian = uangBayar - totalAkhirSetelahDiskon; document.getElementById('uangKembalian').innerText = kembalian >= 0 ? 'Kembali: Rp ' + kembalian.toLocaleString('id-ID') : 'Kurang: Rp ' + Math.abs(kembalian).toLocaleString('id-ID'); }
