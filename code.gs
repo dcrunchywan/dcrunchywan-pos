@@ -56,6 +56,10 @@ function doGet(e) {
       data = ambilArusKasBulanan(e.parameter.bulan, e.parameter.tahun);
     } else if (aksi === "ambilMamahBulanan") {
       data = ambilMamahBulanan(e.parameter.bulan, e.parameter.tahun);
+    } else if (aksi === "ambilReconMamah") {
+      data = ambilReconMamah(e.parameter.periode);
+    } else if (aksi === "simpanReconMamah") {
+      data = simpanReconMamah(e.parameter.periode, e.parameter.tgl, e.parameter.nilai);
     } else {
       data = { status: "Error", message: "Aksi GET tidak dikenali" };
     }
@@ -1856,6 +1860,62 @@ function ambilMamahBulanan(bulan, tahun) {
       totalQris: tQ, totalShopee: tS, totalGrab: tG, totalGofood: tF,
       grandTotal: tQ + tS + tG + tF
     };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+
+// Status recon Mamah lintas perangkat, disimpan di tab Recon_Mamah
+// (Periode | Tgl | Recon | Timestamp). Satu baris per hari per periode,
+// ditulis ulang (upsert) sehingga tidak bisa double.
+function _sheetReconMamah() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName("Recon_Mamah");
+  if (!sh) {
+    sh = ss.insertSheet("Recon_Mamah");
+    sh.appendRow(["Periode", "Tgl", "Recon", "Timestamp"]);
+  }
+  return sh;
+}
+function ambilReconMamah(periode) {
+  try {
+    periode = (periode || "").toString();
+    if (!periode) return { status: "Error", message: "Periode kosong" };
+    var sh = _sheetReconMamah();
+    var last = getRealLastRow(sh);
+    var map = {};
+    if (last >= 2) {
+      var data = sh.getRange(2, 1, last - 1, 3).getValues();
+      data.forEach(function(r) {
+        if ((r[0] || "").toString() === periode && Number(r[2]) === 1) map[Number(r[1])] = true;
+      });
+    }
+    return { status: "ok", periode: periode, recon: map };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+function simpanReconMamah(periode, tgl, nilai) {
+  try {
+    periode = (periode || "").toString();
+    var t = parseInt(tgl, 10);
+    var v = (nilai === true || nilai === "true" || Number(nilai) === 1) ? 1 : 0;
+    if (!periode || !t || t < 1 || t > 31) return { status: "Error", message: "Data tidak valid" };
+    var lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      var sh = _sheetReconMamah();
+      var last = getRealLastRow(sh);
+      var rowIdx = -1;
+      if (last >= 2) {
+        var data = sh.getRange(2, 1, last - 1, 2).getValues();
+        for (var i = 0; i < data.length; i++) {
+          if ((data[i][0] || "").toString() === periode && Number(data[i][1]) === t) { rowIdx = i + 2; break; }
+        }
+      }
+      if (rowIdx > 0) {
+        sh.getRange(rowIdx, 3, 1, 2).setValues([[v, new Date()]]);
+      } else {
+        sh.appendRow([periode, t, v, new Date()]);
+      }
+    } finally { lock.releaseLock(); }
+    return { status: "ok", periode: periode, tgl: t, recon: v };
   } catch (e) { return { status: "Error", message: e.toString() }; }
 }
 

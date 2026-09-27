@@ -12,7 +12,7 @@ let sedangMuat = false;
 // Versi dashboard — tampil di header ("Dashboard Owner · vX.Y").
 // Naikkan setiap rilis supaya owner bisa pastikan tablet/browser
 // sudah memuat kode terbaru (bukan cache lama).
-const APP_VERSION = '2.20';
+const APP_VERSION = '2.21';
 
 function formatRupiahDash(angka) {
   return 'Rp ' + Math.round(Number(angka) || 0).toLocaleString('id-ID');
@@ -580,6 +580,13 @@ function renderMamahList(res) {
   const wrap = document.getElementById('listMamah');
   wrap.innerHTML = '';
   mamahDataTerakhir = res;
+  var lbl = document.getElementById('mamahReconLabel');
+  if (lbl) lbl.textContent = 'Memuat status recon...';
+  mamahReconMuat(res.periodeLabel, () => { gambarBarisMamah(res); mamahReconHitung(); });
+}
+function gambarBarisMamah(res) {
+  const wrap = document.getElementById('listMamah');
+  wrap.innerHTML = '';
   (res.rows || []).forEach((r) => {
     const row = document.createElement('div');
     row.className = 'mamah-row';
@@ -597,53 +604,54 @@ function renderMamahList(res) {
     elT.className = 'mamah-num mamah-total col-total' + (r.total ? '' : ' is-nol');
     elT.textContent = formatRupiahDash(r.total);
     row.appendChild(elT);
-    const kunci = (res.periodeLabel || '') + '|' + r.tgl;
-    const sudah = mamahReconTercatat(res.periodeLabel, kunci);
+    const sudah = !!mamahReconMap[r.tgl];
     const box = document.createElement('input');
     box.type = 'checkbox'; box.className = 'qris-check col-recon';
     box.title = 'Uang sudah direcon ke mamah'; box.checked = sudah;
     if (sudah) row.classList.add('is-cocok');
     box.addEventListener('change', () => {
-      mamahReconSimpan(res.periodeLabel, kunci, box.checked);
-      row.classList.toggle('is-cocok', box.checked);
-      mamahReconHitung(res.periodeLabel);
+      const nilai = box.checked;
+      row.classList.toggle('is-cocok', nilai);
+      google.script.run.withSuccessHandler((sv) => {
+        if (sv && sv.status === 'ok') {
+          if (nilai) mamahReconMap[sv.tgl] = true; else delete mamahReconMap[sv.tgl];
+        } else {
+          box.checked = !nilai; row.classList.toggle('is-cocok', !nilai);
+        }
+        mamahReconHitung();
+      }).withFailureHandler(() => {
+        box.checked = !nilai; row.classList.toggle('is-cocok', !nilai);
+        mamahReconHitung();
+      }).simpanReconMamah(res.periodeLabel, r.tgl, nilai);
     });
     row.appendChild(box);
     wrap.appendChild(row);
   });
   terapkanMamahKolom();
-  mamahReconHitung(res.periodeLabel);
 }
 
-// --- Checkbox recon ke mamah (localStorage, per bulan) ---
-// Status tersimpan per hari; label menampilkan total rupiah sudah/belum.
+// --- Recon Mamah lintas perangkat (disimpan di tab Recon_Mamah) ---
+// Status dibaca dari server tiap buka tab; toggle optimistis + revert
+// bila simpan gagal. Label menampilkan total rupiah sudah/belum.
 var mamahDataTerakhir = null;
-function mamahReconBaca() {
-  try { return JSON.parse(localStorage.getItem('mamahRecon') || '{}'); }
-  catch (e) { return {}; }
+var mamahReconMap = {};
+function mamahReconMuat(periode, lalu) {
+  google.script.run.withSuccessHandler((r) => {
+    mamahReconMap = (r && r.status === 'ok') ? (r.recon || {}) : {};
+    if (lalu) lalu();
+  }).withFailureHandler(() => {
+    mamahReconMap = {};
+    if (lalu) lalu();
+  }).ambilReconMamah(periode);
 }
-function mamahReconTercatat(periode, kunci) {
-  const semua = mamahReconBaca();
-  return !!(semua[periode] && semua[periode][kunci]);
-}
-function mamahReconSimpan(periode, kunci, nilai) {
-  try {
-    const semua = mamahReconBaca();
-    if (!semua[periode]) semua[periode] = {};
-    if (nilai) semua[periode][kunci] = 1; else delete semua[periode][kunci];
-    localStorage.setItem('mamahRecon', JSON.stringify(semua));
-  } catch (e) {}
-}
-function mamahReconHitung(periode) {
-  const semua = mamahReconBaca();
-  const kunciSet = semua[periode] || {};
-  const cocok = mamahDataTerakhir && mamahDataTerakhir.periodeLabel === periode;
-  const rows = cocok ? (mamahDataTerakhir.rows || []) : [];
+function mamahReconHitung() {
+  const res = mamahDataTerakhir;
+  const rows = res ? (res.rows || []) : [];
   var sudahRp = 0, sudahHari = 0;
   rows.forEach((r) => {
-    if (kunciSet[periode + '|' + r.tgl]) { sudahRp += Number(r.total) || 0; sudahHari++; }
+    if (mamahReconMap[r.tgl]) { sudahRp += Number(r.total) || 0; sudahHari++; }
   });
-  const grand = cocok ? (mamahDataTerakhir.grandTotal || 0) : 0;
+  const grand = res ? (res.grandTotal || 0) : 0;
   const el = document.getElementById('mamahReconLabel');
   if (el) el.textContent = rows.length > 0
     ? 'Sudah recon ' + formatRupiahDash(sudahRp) + ' (' + sudahHari + ' hari) · Belum ' + formatRupiahDash(grand - sudahRp) + ' (' + (rows.length - sudahHari) + ' hari)'
