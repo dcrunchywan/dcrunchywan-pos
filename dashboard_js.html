@@ -9,6 +9,11 @@
 let modeAktif = 'harian';
 let sedangMuat = false;
 
+// Versi dashboard — tampil di header ("Dashboard Owner · vX.Y").
+// Naikkan setiap rilis supaya owner bisa pastikan tablet/browser
+// sudah memuat kode terbaru (bukan cache lama).
+const APP_VERSION = '2.14';
+
 function formatRupiahDash(angka) {
   return 'Rp ' + Math.round(Number(angka) || 0).toLocaleString('id-ID');
 }
@@ -597,6 +602,7 @@ function clearWalletDashFilter(){
 // dan renderChart() akan melempar error yang menggagalkan sisa render
 // (termasuk renderMetode() yang dipanggil setelahnya di fungsi yang sama).
 window.addEventListener('load', () => {
+  try { document.getElementById('appVersion').textContent = 'v' + APP_VERSION; } catch (e) {}
   inisialisasiPicker();
   muatUlangData();
   fetchWallet();
