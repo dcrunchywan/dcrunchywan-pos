@@ -1042,7 +1042,11 @@ function _totalPengeluaranPeriode(ss, filterFn) {
 // penting supaya diskon per-struk tidak terhitung berkali-kali per item.
 function _kumpulkanNotaTransaksi(sheet, filterBulanTahunFn) {
   var lastRow = getRealLastRow(sheet);
-  var notaMap = {}; // key: tgl string -> { rawTotal, diskonNilai, diskonTipe, metode, tanggal, bulan, tahun }
+  var notaMap = {}; // key: "tgl string|metode" -> { rawTotal, diskonNilai, diskonTipe, metode, tanggal, bulan, tahun }
+  // Kunci memakai metode juga (bukan hanya timestamp): baris-baris lama
+  // bertanggal saja tanpa jam (mis. awal Agustus 2026) akan runtuh jadi
+  // SATU nota bila kuncinya timestamp saja, sehingga metode baris pertama
+  // menelan seluruh hari. Nol diskon di data membuat split ini eksak.
   var ayamQtyPerHari = {}; // key: "tahun-bulan-tanggal" -> qty
   var ayamTotalQty = 0;
   var nasiQtyPerHari = {};
@@ -1069,11 +1073,12 @@ function _kumpulkanNotaTransaksi(sheet, filterBulanTahunFn) {
     var diskonNilai = Number(row[7]) || 0;
     var diskonTipe = row[8] || "Rp";
     var subtotalRow = qty * harga;
+    var kunciNota = tglStr + "|" + (metode || "Cash").toString().toLowerCase();
 
-    if (!notaMap[tglStr]) {
-      notaMap[tglStr] = { rawTotal: 0, diskonNilai: diskonNilai, diskonTipe: diskonTipe, metode: metode, tanggal: p.tanggal, bulan: p.bulan, tahun: p.tahun };
+    if (!notaMap[kunciNota]) {
+      notaMap[kunciNota] = { rawTotal: 0, diskonNilai: diskonNilai, diskonTipe: diskonTipe, metode: metode, tanggal: p.tanggal, bulan: p.bulan, tahun: p.tahun };
     }
-    notaMap[tglStr].rawTotal += subtotalRow;
+    notaMap[kunciNota].rawTotal += subtotalRow;
 
     if (_itemAdalahAyam(namaItem, cat1)) {
       ayamTotalQty += qty;
