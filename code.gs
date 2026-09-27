@@ -1897,10 +1897,16 @@ function ambilReconMamah(periode) {
     var last = getRealLastRow(sh);
     var map = {};
     if (last >= 2) {
-      var data = sh.getRange(2, 1, last - 1, 3).getValues();
+      // Baris bisa ganda (riwayat tulis); yang menang = timestamp terbaru.
+      var data = sh.getRange(2, 1, last - 1, 4).getValues();
+      var tmp = {};
       data.forEach(function(r) {
-        if (_periodeReconCocok(r[0], periode) && Number(r[2]) === 1) map[Number(r[1])] = true;
+        if (!_periodeReconCocok(r[0], periode)) return;
+        var t = Number(r[1]);
+        var ts = (r[3] instanceof Date) ? r[3].getTime() : 0;
+        if (!tmp[t] || ts >= tmp[t].ts) tmp[t] = { v: (Number(r[2]) === 1), ts: ts };
       });
+      Object.keys(tmp).forEach(function(k) { if (tmp[k].v) map[k] = true; });
     }
     return { status: "ok", periode: periode, recon: map };
   } catch (e) { return { status: "Error", message: e.toString() }; }
