@@ -12,7 +12,7 @@ let sedangMuat = false;
 // Versi dashboard — tampil di header ("Dashboard Owner · vX.Y").
 // Naikkan setiap rilis supaya owner bisa pastikan tablet/browser
 // sudah memuat kode terbaru (bukan cache lama).
-const APP_VERSION = '2.19';
+const APP_VERSION = '2.20';
 
 function formatRupiahDash(angka) {
   return 'Rp ' + Math.round(Number(angka) || 0).toLocaleString('id-ID');
@@ -579,42 +579,45 @@ function renderMamahList(res) {
 
   const wrap = document.getElementById('listMamah');
   wrap.innerHTML = '';
-  const jmlHari = (res.rows || []).length;
+  mamahDataTerakhir = res;
   (res.rows || []).forEach((r) => {
     const row = document.createElement('div');
     row.className = 'mamah-row';
     const elTgl = document.createElement('span');
-    elTgl.className = 'mamah-tgl'; elTgl.textContent = r.tgl;
+    elTgl.className = 'mamah-tgl col-tgl'; elTgl.textContent = r.tgl;
     row.appendChild(elTgl);
-    const kolom = [r.qris, r.shopee, r.grab, r.gofood];
-    kolom.forEach((nilai) => {
+    const kolom = [['qris', r.qris], ['shopee', r.shopee], ['grab', r.grab], ['gofood', r.gofood]];
+    kolom.forEach((pas) => {
       const el = document.createElement('span');
-      el.className = 'mamah-num' + (nilai ? '' : ' is-nol');
-      el.textContent = formatRupiahDash(nilai);
+      el.className = 'mamah-num col-' + pas[0] + (pas[1] ? '' : ' is-nol');
+      el.textContent = formatRupiahDash(pas[1]);
       row.appendChild(el);
     });
     const elT = document.createElement('span');
-    elT.className = 'mamah-num mamah-total' + (r.total ? '' : ' is-nol');
+    elT.className = 'mamah-num mamah-total col-total' + (r.total ? '' : ' is-nol');
     elT.textContent = formatRupiahDash(r.total);
     row.appendChild(elT);
     const kunci = (res.periodeLabel || '') + '|' + r.tgl;
     const sudah = mamahReconTercatat(res.periodeLabel, kunci);
     const box = document.createElement('input');
-    box.type = 'checkbox'; box.className = 'qris-check';
+    box.type = 'checkbox'; box.className = 'qris-check col-recon';
     box.title = 'Uang sudah direcon ke mamah'; box.checked = sudah;
     if (sudah) row.classList.add('is-cocok');
     box.addEventListener('change', () => {
       mamahReconSimpan(res.periodeLabel, kunci, box.checked);
       row.classList.toggle('is-cocok', box.checked);
-      mamahReconHitung(res.periodeLabel, jmlHari);
+      mamahReconHitung(res.periodeLabel);
     });
     row.appendChild(box);
     wrap.appendChild(row);
   });
-  mamahReconHitung(res.periodeLabel, jmlHari);
+  terapkanMamahKolom();
+  mamahReconHitung(res.periodeLabel);
 }
 
 // --- Checkbox recon ke mamah (localStorage, per bulan) ---
+// Status tersimpan per hari; label menampilkan total rupiah sudah/belum.
+var mamahDataTerakhir = null;
 function mamahReconBaca() {
   try { return JSON.parse(localStorage.getItem('mamahRecon') || '{}'); }
   catch (e) { return {}; }
@@ -631,11 +634,48 @@ function mamahReconSimpan(periode, kunci, nilai) {
     localStorage.setItem('mamahRecon', JSON.stringify(semua));
   } catch (e) {}
 }
-function mamahReconHitung(periode, jmlHari) {
+function mamahReconHitung(periode) {
   const semua = mamahReconBaca();
-  const jml = Object.keys(semua[periode] || {}).length;
+  const kunciSet = semua[periode] || {};
+  const cocok = mamahDataTerakhir && mamahDataTerakhir.periodeLabel === periode;
+  const rows = cocok ? (mamahDataTerakhir.rows || []) : [];
+  var sudahRp = 0, sudahHari = 0;
+  rows.forEach((r) => {
+    if (kunciSet[periode + '|' + r.tgl]) { sudahRp += Number(r.total) || 0; sudahHari++; }
+  });
+  const grand = cocok ? (mamahDataTerakhir.grandTotal || 0) : 0;
   const el = document.getElementById('mamahReconLabel');
-  if (el) el.textContent = (jmlHari || 0) > 0 ? jml + ' dari ' + jmlHari + ' hari recon' : '';
+  if (el) el.textContent = rows.length > 0
+    ? 'Sudah recon ' + formatRupiahDash(sudahRp) + ' (' + sudahHari + ' hari) · Belum ' + formatRupiahDash(grand - sudahRp) + ' (' + (rows.length - sudahHari) + ' hari)'
+    : '';
+}
+// --- Tampil/sembunyi kolom metode Mamah (preferensi tersimpan lokal) ---
+var mamahKolom = null;
+function mamahKolomMuat() {
+  try { mamahKolom = JSON.parse(localStorage.getItem('mamahKolom') || ''); } catch (e) { mamahKolom = null; }
+  if (!mamahKolom) mamahKolom = { qris: true, shopee: true, grab: true, gofood: true };
+}
+function mamahKolomSimpan() {
+  try { localStorage.setItem('mamahKolom', JSON.stringify(mamahKolom)); } catch (e) {}
+}
+function terapkanMamahKolom() {
+  mamahKolomMuat();
+  var panel = document.getElementById('panelMamah');
+  if (!panel) return;
+  var nTampil = 0;
+  ['qris', 'shopee', 'grab', 'gofood'].forEach((k) => {
+    var sembunyi = mamahKolom[k] === false;
+    if (sembunyi) panel.classList.add('hide-' + k); else { panel.classList.remove('hide-' + k); nTampil++; }
+    var chip = document.getElementById('chip' + k.charAt(0).toUpperCase() + k.slice(1));
+    if (chip) chip.classList.toggle('off', sembunyi);
+  });
+  panel.style.setProperty('--mamah-cols', '1.6em repeat(' + (nTampil + 1) + ', 1fr) 22px');
+}
+function toggleMamahCol(k) {
+  mamahKolomMuat();
+  mamahKolom[k] = !mamahKolom[k];
+  mamahKolomSimpan();
+  terapkanMamahKolom();
 }
 function renderOjolList(res, prefix){
   var cap = prefix.charAt(0).toUpperCase()+prefix.slice(1);
