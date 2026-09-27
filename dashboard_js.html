@@ -12,7 +12,7 @@ let sedangMuat = false;
 // Versi dashboard — tampil di header ("Dashboard Owner · vX.Y").
 // Naikkan setiap rilis supaya owner bisa pastikan tablet/browser
 // sudah memuat kode terbaru (bukan cache lama).
-const APP_VERSION = '2.16';
+const APP_VERSION = '2.17';
 
 function formatRupiahDash(angka) {
   return 'Rp ' + Math.round(Number(angka) || 0).toLocaleString('id-ID');
@@ -443,11 +443,11 @@ function renderArusKas(res) {
   // semuanya angka dari server, aman dari injeksi markup.
   var html = '';
   (res.rows || []).forEach((r) => {
-    html += '<div class="qris-row">'
-      + '<span class="qris-jam">' + r.tgl + '</span>'
-      + '<span class="qris-sumber">Cash ' + formatRupiahDash(r.cash) + '</span>'
-      + '<span class="qris-leader"></span>'
-      + '<span class="qris-nilai">B ' + formatRupiahDash(r.belanja) + ' · S ' + formatRupiahDash(r.setor) + '</span>'
+    html += '<div class="aruskas-row">'
+      + '<span class="aruskas-tgl">' + r.tgl + '</span>'
+      + '<span class="aruskas-num' + (r.cash ? '' : ' is-nol') + '">' + formatRupiahDash(r.cash) + '</span>'
+      + '<span class="aruskas-num' + (r.belanja ? '' : ' is-nol') + '">' + formatRupiahDash(r.belanja) + '</span>'
+      + '<span class="aruskas-num' + (r.setor ? '' : ' is-nol') + '">' + formatRupiahDash(r.setor) + '</span>'
       + '</div>';
   });
   wrap.innerHTML = html;
@@ -505,12 +505,13 @@ function renderQrisList(res) {
     const elNilai = document.createElement('span');
     elNilai.className = 'qris-nilai'; elNilai.textContent = formatRupiahDash(n.total);
     row.appendChild(elJam); row.appendChild(elSumber); row.appendChild(leader);
-    row.appendChild(box); row.appendChild(elNilai);
+    row.appendChild(elNilai);
     if (isVoid) {
       const badge = document.createElement('span');
       badge.className = 'qris-badge-void'; badge.textContent = 'VOID';
       row.appendChild(badge);
     }
+    row.appendChild(box);
     wrap.appendChild(row);
   });
   qrisCocokHitung(res.periodeLabel);

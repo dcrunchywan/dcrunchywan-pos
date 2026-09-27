@@ -392,6 +392,41 @@ html, body {
   margin: 0 0 10px;
   min-height: 1em;
 }
+/* ---------- Arus Kas: tabel 4 kolom sejajar ---------- */
+.aruskas-head,
+.aruskas-row {
+  display: grid;
+  grid-template-columns: 2em 1fr 1fr 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 7px 4px;
+}
+.aruskas-head {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  margin-bottom: 4px;
+}
+.aruskas-head span:nth-child(n+2),
+.aruskas-row .aruskas-num {
+  text-align: right;
+}
+.aruskas-row {
+  border-bottom: 1px dotted rgba(255, 255, 255, 0.08);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.aruskas-tgl {
+  font-weight: 700;
+}
+.aruskas-num {
+  white-space: nowrap;
+}
+.aruskas-num.is-nol {
+  color: var(--text-dim);
+}
 
 /* ---------- Log Dapur (goreng ayam, ayam terjual, pemakaian minyak) ---------- */
 .kpi-strip-dapur { grid-template-columns: repeat(3, 1fr); margin-bottom: 22px; }
