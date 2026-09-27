@@ -52,6 +52,8 @@ function doGet(e) {
       data = getWalletSaldo();
     } else if (aksi === "ambilWalletSaldoPeriode") {
       data = getWalletSaldoPeriode(e.parameter.bulan, e.parameter.tahun, e.parameter.tanggal);
+    } else if (aksi === "ambilArusKasBulanan") {
+      data = ambilArusKasBulanan(e.parameter.bulan, e.parameter.tahun);
     } else {
       data = { status: "Error", message: "Aksi GET tidak dikenali" };
     }
@@ -1741,6 +1743,67 @@ function getWalletSaldoPeriode(bulan, tahun, tanggal) {
       }
     };
   } catch(e) { return { status:"Error", message:e.toString() }; }
+}
+
+// ============================================================
+//  ARUS KAS BULANAN — replika otomatis tabel manual "Catatan"
+//  (E12:I43): per hari [cash ayam | belanja | setor/tarik],
+//  plus total + grandTotal (cash - belanja - setor).
+//  Cash = Transaksi cash (tanpa Mamah). Belanja = Belanja
+//  Operasional/Operasional. Setor = Setoran Owner + Tarik Tunai.
+// ============================================================
+function ambilArusKasBulanan(bulan, tahun) {
+  try {
+    var bulanNum = parseInt(bulan, 10), tahunNum = parseInt(tahun, 10);
+    if (!bulanNum || !tahunNum) return { status: "Error", message: "Bulan/tahun tidak valid" };
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    var cashPerHari = {};
+    var sheetAyam = ss.getSheetByName(namaSheetTransaksiUntukTahun(tahunNum));
+    if (sheetAyam) {
+      var hk = _kumpulkanNotaTransaksi(sheetAyam, function(p) { return p.bulan === bulanNum && p.tahun === tahunNum; });
+      Object.keys(hk.notaMap).forEach(function(k) {
+        var nota = hk.notaMap[k];
+        if ((nota.metode || "").toString().toLowerCase() !== "cash") return;
+        var p; try { p = _parseTglNota(k); } catch (errP) { return; }
+        cashPerHari[p.tanggal] = (cashPerHari[p.tanggal] || 0) + _nettNota(nota);
+      });
+    }
+
+    var belanjaPerHari = {}, setorPerHari = {};
+    var sheetPeng = ss.getSheetByName("Pengeluaran");
+    if (sheetPeng && getRealLastRow(sheetPeng) >= 2) {
+      var lastRow = getRealLastRow(sheetPeng);
+      var data = sheetPeng.getRange(2, 1, lastRow - 1, 6).getValues();
+      data.forEach(function(row) {
+        if (!(row[0] instanceof Date)) return;
+        if (row[0].getMonth() + 1 !== bulanNum || row[0].getFullYear() !== tahunNum) return;
+        var tgl = row[0].getDate();
+        var jenis = row[1] ? row[1].toString().trim() : "";
+        var nominal = Number(row[3]) || 0;
+        if (jenis === "Belanja Operasional" || jenis === "Operasional") {
+          belanjaPerHari[tgl] = (belanjaPerHari[tgl] || 0) + nominal;
+        } else if (jenis === "Setoran Owner" || jenis === "Tarik Tunai") {
+          setorPerHari[tgl] = (setorPerHari[tgl] || 0) + nominal;
+        }
+      });
+    }
+
+    var jmlHari = new Date(tahunNum, bulanNum, 0).getDate();
+    var rows = [], tCash = 0, tBelanja = 0, tSetor = 0;
+    for (var d = 1; d <= jmlHari; d++) {
+      var c = Math.round(cashPerHari[d] || 0), b = Math.round(belanjaPerHari[d] || 0), s = Math.round(setorPerHari[d] || 0);
+      rows.push({ tgl: d, cash: c, belanja: b, setor: s });
+      tCash += c; tBelanja += b; tSetor += s;
+    }
+    return {
+      status: "ok",
+      periodeLabel: NAMA_BULAN_INDO[bulanNum - 1] + " " + tahunNum,
+      rows: rows,
+      totalCash: tCash, totalBelanja: tBelanja, totalSetor: tSetor,
+      grandTotal: tCash - tBelanja - tSetor
+    };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
 }
 
 function arsipkanTahunTransaksi(pinInput) {

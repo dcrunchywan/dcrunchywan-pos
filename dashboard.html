@@ -30,6 +30,7 @@
         <button class="mode-btn" id="modeGrabBtn" onclick="ubahMode('grab')" role="tab" aria-selected="false">Grab</button>
         <button class="mode-btn" id="modeGofoodBtn" onclick="ubahMode('gofood')" role="tab" aria-selected="false">Gofood</button>
         <button class="mode-btn" id="modeDapurBtn" onclick="ubahMode('dapur')" role="tab" aria-selected="false">Log Dapur</button>
+        <button class="mode-btn" id="modeArusKasBtn" onclick="ubahMode('aruskas')" role="tab" aria-selected="false">Arus Kas</button>
       </div>
     </header>
 
@@ -229,6 +230,19 @@
         <h2>Riwayat Aktivitas <span id="dapurPeriodeLabel"></span></h2>
       </div>
       <div class="dapur-list" id="listDapur"></div>
+    </section>
+
+    <section class="panel panel-qris" id="panelArusKas" style="display:none;">
+      <div class="panel-head panel-head-qris">
+        <h2>Arus Kas <span id="arusKasPeriodeLabel"></span></h2>
+        <div class="qris-total" id="arusKasGrandTotal">Rp 0</div>
+      </div>
+      <div class="kpi-strip" style="grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div class="kpi-card"><span class="kpi-label">Total Cash Ayam</span><div class="kpi-value" id="arusKasTotalCash">Rp 0</div></div>
+        <div class="kpi-card"><span class="kpi-label">Total Belanja</span><div class="kpi-value" id="arusKasTotalBelanja">Rp 0</div></div>
+        <div class="kpi-card"><span class="kpi-label">Total Setor/Tarik</span><div class="kpi-value" id="arusKasTotalSetor">Rp 0</div></div>
+      </div>
+      <div class="qris-list" id="listArusKas"></div>
     </section>
 
     <div class="dash-empty" id="emptyState" style="display:none;">
