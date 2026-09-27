@@ -1875,6 +1875,20 @@ function _sheetReconMamah() {
   }
   return sh;
 }
+// Kolom Periode di Recon_Mamah rawan dikonversi Sheets jadi Date
+// ("September 2026" terbaca sebagai 1 Sep 2026). Bandingkan longgar:
+// cocok bila teks sama persis ATAU bila sel Date-nya bulan+tahun sama.
+function _periodeReconCocok(sel, periode) {
+  if ((sel || "").toString() === periode) return true;
+  if (sel instanceof Date) {
+    var pot = (periode || "").toString().split(" ");
+    var th = parseInt(pot[pot.length - 1], 10);
+    var namaBulan = pot.slice(0, pot.length - 1).join(" ");
+    var bl = NAMA_BULAN_INDO.indexOf(namaBulan) + 1;
+    return sel.getFullYear() === th && (sel.getMonth() + 1) === bl;
+  }
+  return false;
+}
 function ambilReconMamah(periode) {
   try {
     periode = (periode || "").toString();
@@ -1885,7 +1899,7 @@ function ambilReconMamah(periode) {
     if (last >= 2) {
       var data = sh.getRange(2, 1, last - 1, 3).getValues();
       data.forEach(function(r) {
-        if ((r[0] || "").toString() === periode && Number(r[2]) === 1) map[Number(r[1])] = true;
+        if (_periodeReconCocok(r[0], periode) && Number(r[2]) === 1) map[Number(r[1])] = true;
       });
     }
     return { status: "ok", periode: periode, recon: map };
@@ -1901,12 +1915,15 @@ function simpanReconMamah(periode, tgl, nilai) {
     lock.waitLock(10000);
     try {
       var sh = _sheetReconMamah();
+      // Kunci kolom A sebagai teks supaya "September 2026" tidak
+      // dikonversi Sheets menjadi Date.
+      sh.getRange("A:A").setNumberFormat("@");
       var last = getRealLastRow(sh);
       var rowIdx = -1;
       if (last >= 2) {
         var data = sh.getRange(2, 1, last - 1, 2).getValues();
         for (var i = 0; i < data.length; i++) {
-          if ((data[i][0] || "").toString() === periode && Number(data[i][1]) === t) { rowIdx = i + 2; break; }
+          if (_periodeReconCocok(data[i][0], periode) && Number(data[i][1]) === t) { rowIdx = i + 2; break; }
         }
       }
       if (rowIdx > 0) {
