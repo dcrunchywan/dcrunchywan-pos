@@ -54,6 +54,8 @@ function doGet(e) {
       data = getWalletSaldoPeriode(e.parameter.bulan, e.parameter.tahun, e.parameter.tanggal);
     } else if (aksi === "ambilArusKasBulanan") {
       data = ambilArusKasBulanan(e.parameter.bulan, e.parameter.tahun);
+    } else if (aksi === "ambilMamahBulanan") {
+      data = ambilMamahBulanan(e.parameter.bulan, e.parameter.tahun);
     } else {
       data = { status: "Error", message: "Aksi GET tidak dikenali" };
     }
@@ -1802,6 +1804,57 @@ function ambilArusKasBulanan(bulan, tahun) {
       rows: rows,
       totalCash: tCash, totalBelanja: tBelanja, totalSetor: tSetor,
       grandTotal: tCash - tBelanja - tSetor
+    };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+
+// Rekap bulanan Transaksi Mamah per hari per metode (QRIS/Shopee/Grab/
+// Gofood) untuk tab Mamah di dashboard. Memakai helper daftar-nota yang
+// sama dengan tab QRIS/Shopee/Grab/Gofood sehingga definisi metode,
+// grouping nota, dan perlakuan VOID konsisten. Cash Mamah sengaja tidak
+// ikut (tab ini khusus rekap non-tunai).
+function ambilMamahBulanan(bulan, tahun) {
+  try {
+    var bulanNum = parseInt(bulan, 10), tahunNum = parseInt(tahun, 10);
+    if (!bulanNum || !tahunNum) return { status: "Error", message: "Bulan/tahun tidak valid" };
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetMamah = ss.getSheetByName(namaSheetMamahUntukTahun(tahunNum));
+
+    var perHari = {};
+    if (sheetMamah) {
+      var filterBulan = function(p) { return p.bulan === bulanNum && p.tahun === tahunNum; };
+      var groups = [
+        { k: "qris", daftar: _daftarNotaQrisDariSheet(sheetMamah, filterBulan, "Mamah") },
+        { k: "shopee", daftar: _daftarNotaShopeeDariSheet(sheetMamah, filterBulan, "Mamah") },
+        { k: "grab", daftar: _daftarNotaGrabDariSheet(sheetMamah, filterBulan, "Mamah") },
+        { k: "gofood", daftar: _daftarNotaGofoodDariSheet(sheetMamah, filterBulan, "Mamah") }
+      ];
+      groups.forEach(function(g) {
+        g.daftar.forEach(function(n) {
+          if (n.status === "VOID") return;
+          var p; try { p = _parseTglNota(n.tglStr); } catch (errP) { return; }
+          var d = p.tanggal;
+          if (!perHari[d]) perHari[d] = { qris: 0, shopee: 0, grab: 0, gofood: 0 };
+          perHari[d][g.k] += Number(n.total) || 0;
+        });
+      });
+    }
+
+    var jmlHari = new Date(tahunNum, bulanNum, 0).getDate();
+    var rows = [], tQ = 0, tS = 0, tG = 0, tF = 0;
+    for (var d = 1; d <= jmlHari; d++) {
+      var h = perHari[d] || { qris: 0, shopee: 0, grab: 0, gofood: 0 };
+      var q = Math.round(h.qris), s = Math.round(h.shopee),
+          g = Math.round(h.grab), f = Math.round(h.gofood);
+      rows.push({ tgl: d, qris: q, shopee: s, grab: g, gofood: f, total: q + s + g + f });
+      tQ += q; tS += s; tG += g; tF += f;
+    }
+    return {
+      status: "ok",
+      periodeLabel: NAMA_BULAN_INDO[bulanNum - 1] + " " + tahunNum,
+      rows: rows,
+      totalQris: tQ, totalShopee: tS, totalGrab: tG, totalGofood: tF,
+      grandTotal: tQ + tS + tG + tF
     };
   } catch (e) { return { status: "Error", message: e.toString() }; }
 }

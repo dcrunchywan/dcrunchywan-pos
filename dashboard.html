@@ -29,6 +29,7 @@
         <button class="mode-btn" id="modeShopeeBtn" onclick="ubahMode('shopee')" role="tab" aria-selected="false">Shopee</button>
         <button class="mode-btn" id="modeGrabBtn" onclick="ubahMode('grab')" role="tab" aria-selected="false">Grab</button>
         <button class="mode-btn" id="modeGofoodBtn" onclick="ubahMode('gofood')" role="tab" aria-selected="false">Gofood</button>
+        <button class="mode-btn" id="modeMamahBtn" onclick="ubahMode('mamah')" role="tab" aria-selected="false">Mamah</button>
         <button class="mode-btn" id="modeDapurBtn" onclick="ubahMode('dapur')" role="tab" aria-selected="false">Log Dapur</button>
         <button class="mode-btn" id="modeArusKasBtn" onclick="ubahMode('aruskas')" role="tab" aria-selected="false">Arus Kas</button>
       </div>
@@ -207,6 +208,24 @@
         <div class="kpi-card" style="border-top-color:var(--ember)"><span class="kpi-label">Gofood Mamah — Hari Ini</span><div class="kpi-value" id="gofoodMamahHari">Rp 0</div></div>
       </div>
       <div class="qris-list" id="listGofood"></div>
+    </section>
+
+    <section class="panel panel-qris" id="panelMamah" style="display:none;">
+      <div class="panel-head panel-head-qris">
+        <h2>Rekap <span>Mamah</span> <span id="mamahPeriodeLabel"></span></h2>
+        <div class="qris-total" id="mamahGrandTotal">Rp 0</div>
+      </div>
+      <div class="qris-cocok" id="mamahReconLabel"></div>
+      <div class="kpi-strip" style="grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div class="kpi-card"><span class="kpi-label">QRIS Mamah</span><div class="kpi-value" id="mamahTotalQris">Rp 0</div></div>
+        <div class="kpi-card"><span class="kpi-label">Shopee Mamah</span><div class="kpi-value" id="mamahTotalShopee">Rp 0</div></div>
+      </div>
+      <div class="kpi-strip" style="grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div class="kpi-card"><span class="kpi-label">Grab Mamah</span><div class="kpi-value" id="mamahTotalGrab">Rp 0</div></div>
+        <div class="kpi-card"><span class="kpi-label">Gofood Mamah</span><div class="kpi-value" id="mamahTotalGofood">Rp 0</div></div>
+      </div>
+      <div class="mamah-head"><span>Tgl</span><span>QRIS</span><span>Shopee</span><span>Grab</span><span>Gofood</span><span>Total</span><span>&#10003;</span></div>
+      <div class="qris-list" id="listMamah"></div>
     </section>
 
     <section class="panel panel-dapur" id="panelDapur" style="display:none;">

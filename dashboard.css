@@ -427,6 +427,50 @@ html, body {
 .aruskas-num.is-nol {
   color: var(--text-dim);
 }
+/* ---------- Mamah: tabel 7 kolom (tgl + 4 metode + total + recon) ---------- */
+.mamah-head,
+.mamah-row {
+  display: grid;
+  grid-template-columns: 1.6em repeat(5, 1fr) 22px;
+  gap: 6px;
+  align-items: baseline;
+  padding: 7px 4px;
+}
+.mamah-head {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  margin-bottom: 4px;
+}
+.mamah-head span:nth-child(n+2),
+.mamah-row .mamah-num {
+  text-align: right;
+}
+.mamah-head span:last-child {
+  text-align: center;
+}
+.mamah-row {
+  border-bottom: 1px dotted rgba(255, 255, 255, 0.08);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+.mamah-tgl {
+  font-weight: 700;
+}
+.mamah-num {
+  white-space: nowrap;
+}
+.mamah-num.is-nol {
+  color: var(--text-dim);
+}
+.mamah-total {
+  font-weight: 700;
+}
+.mamah-row.is-cocok .mamah-total {
+  color: var(--ok, #2ecc71);
+}
 
 /* ---------- Log Dapur (goreng ayam, ayam terjual, pemakaian minyak) ---------- */
 .kpi-strip-dapur { grid-template-columns: repeat(3, 1fr); margin-bottom: 22px; }

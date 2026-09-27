@@ -12,7 +12,7 @@ let sedangMuat = false;
 // Versi dashboard — tampil di header ("Dashboard Owner · vX.Y").
 // Naikkan setiap rilis supaya owner bisa pastikan tablet/browser
 // sudah memuat kode terbaru (bukan cache lama).
-const APP_VERSION = '2.18';
+const APP_VERSION = '2.19';
 
 function formatRupiahDash(angka) {
   return 'Rp ' + Math.round(Number(angka) || 0).toLocaleString('id-ID');
@@ -80,14 +80,15 @@ function ubahMode(mode) {
   var shopeeBtn=document.getElementById('modeShopeeBtn'); if(shopeeBtn){ shopeeBtn.classList.toggle('active', mode==='shopee'); shopeeBtn.setAttribute('aria-selected', mode==='shopee'); }
   var grabBtn=document.getElementById('modeGrabBtn'); if(grabBtn){ grabBtn.classList.toggle('active', mode==='grab'); grabBtn.setAttribute('aria-selected', mode==='grab'); }
   var gofoodBtn=document.getElementById('modeGofoodBtn'); if(gofoodBtn){ gofoodBtn.classList.toggle('active', mode==='gofood'); gofoodBtn.setAttribute('aria-selected', mode==='gofood'); }
+  var mamahBtn=document.getElementById('modeMamahBtn'); if(mamahBtn){ mamahBtn.classList.toggle('active', mode==='mamah'); mamahBtn.setAttribute('aria-selected', mode==='mamah'); }
   document.getElementById('modeDapurBtn').classList.toggle('active', mode === 'dapur');
   document.getElementById('modeDapurBtn').setAttribute('aria-selected', mode === 'dapur');
   var arusKasBtn = document.getElementById('modeArusKasBtn');
   if (arusKasBtn) { arusKasBtn.classList.toggle('active', mode === 'aruskas'); arusKasBtn.setAttribute('aria-selected', mode === 'aruskas'); }
 
   var isOjol = (mode==='qris'||mode==='shopee'||mode==='grab'||mode==='gofood');
-  document.getElementById('pickerBulanWrap').style.display = (mode === 'bulanan' || mode === 'aruskas') ? 'flex' : 'none';
-  document.getElementById('pickerTahunWrap').style.display = (mode === 'bulanan' || mode === 'aruskas') ? 'flex' : 'none';
+  document.getElementById('pickerBulanWrap').style.display = (mode === 'bulanan' || mode === 'aruskas' || mode === 'mamah') ? 'flex' : 'none';
+  document.getElementById('pickerTahunWrap').style.display = (mode === 'bulanan' || mode === 'aruskas' || mode === 'mamah') ? 'flex' : 'none';
   document.getElementById('pickerTanggalWrap').style.display = (isOjol || mode === 'dapur') ? 'flex' : 'none';
   var harianWrap = document.getElementById('pickerHarianTanggalWrap');
   if(harianWrap) harianWrap.style.display = (mode === 'harian') ? 'flex' : 'none';
@@ -103,6 +104,7 @@ function ubahMode(mode) {
   var pShopee=document.getElementById('panelShopee'); if(pShopee) pShopee.style.display=(mode==='shopee')?'block':'none';
   var pGrab=document.getElementById('panelGrab'); if(pGrab) pGrab.style.display=(mode==='grab')?'block':'none';
   var pGofood=document.getElementById('panelGofood'); if(pGofood) pGofood.style.display=(mode==='gofood')?'block':'none';
+  var pMamah=document.getElementById('panelMamah'); if(pMamah) pMamah.style.display=(mode==='mamah')?'block':'none';
   document.getElementById('panelDapur').style.display = (mode === 'dapur') ? 'block' : 'none';
   var pArusKas = document.getElementById('panelArusKas');
   if (pArusKas) pArusKas.style.display = (mode === 'aruskas') ? 'block' : 'none';
@@ -113,7 +115,7 @@ function ubahMode(mode) {
   // ditampilkan lagi -- karena ukurannya ke-cache 0 saat itu. Solusinya:
   // hancurkan instance chart lama begitu panel-chart disembunyikan, supaya
   // dibuat ULANG dari nol (dengan ukuran yang benar) saat ditampilkan lagi.
-  if ((mode === 'qris' || mode==='shopee' || mode==='grab' || mode==='gofood' || mode==='aruskas') && chartInstance) {
+  if ((mode === 'qris' || mode==='shopee' || mode==='grab' || mode==='gofood' || mode==='mamah' || mode==='aruskas') && chartInstance) {
     chartInstance.destroy();
     chartInstance = null;
   }
@@ -126,6 +128,8 @@ function ubahMode(mode) {
     document.getElementById('dashFooter').innerHTML = 'Sumber data: tab <strong>Transaksi</strong> &amp; <strong>Transaksi Mamah</strong> (gabungan, khusus Grab)';
   } else if (mode === 'gofood') {
     document.getElementById('dashFooter').innerHTML = 'Sumber data: tab <strong>Transaksi</strong> &amp; <strong>Transaksi Mamah</strong> (gabungan, khusus Gofood)';
+  } else if (mode === 'mamah') {
+    document.getElementById('dashFooter').innerHTML = 'Sumber data: tab <strong>Transaksi Mamah</strong> (rekap bulanan non-tunai)';
   } else if (mode === 'dapur') {
     document.getElementById('dashFooter').innerHTML = 'Sumber data: tab <strong>Log_Stok_Ayam</strong> &amp; <strong>Transaksi</strong> (ayam terjual)';
   } else if (mode === 'aruskas') {
@@ -209,6 +213,20 @@ function muatUlangData() {
     };
     google.script.run.withSuccessHandler(onSuksesKas).withFailureHandler(onGagal)
       .ambilArusKasBulanan(parseInt(_b.value, 10), parseInt(_t.value, 10));
+    return;
+  }
+
+  if (modeAktif === 'mamah') {
+    var _b = document.getElementById('selectBulan'); var _t = document.getElementById('selectTahun');
+    if (!_b || !_t || !_b.value || !_t.value) { sedangMuat = false; btn.classList.remove('is-loading'); return; }
+    const onSuksesMamah = (res) => {
+      sedangMuat = false;
+      btn.classList.remove('is-loading');
+      if (!res || res.status !== 'ok') { tampilkanError(); return; }
+      renderMamahList(res);
+    };
+    google.script.run.withSuccessHandler(onSuksesMamah).withFailureHandler(onGagal)
+      .ambilMamahBulanan(parseInt(_b.value, 10), parseInt(_t.value, 10));
     return;
   }
 
@@ -547,6 +565,77 @@ function qrisCocokHitung(periode) {
   const jml = Object.keys(semua[periode] || {}).length;
   const el = document.getElementById('qrisCocokLabel');
   if (el) el.textContent = jml > 0 ? jml + ' cocok mutasi' : '';
+}
+// --- Rekap Mamah per hari per metode + total harian + checkbox recon ---
+// Semua nilai dari server berupa angka — aman dirender via textContent.
+// Baris dibangun via DOM API (aturan parse HtmlService).
+function renderMamahList(res) {
+  document.getElementById('mamahPeriodeLabel').textContent = res.periodeLabel || '';
+  document.getElementById('mamahTotalQris').textContent = formatRupiahDash(res.totalQris || 0);
+  document.getElementById('mamahTotalShopee').textContent = formatRupiahDash(res.totalShopee || 0);
+  document.getElementById('mamahTotalGrab').textContent = formatRupiahDash(res.totalGrab || 0);
+  document.getElementById('mamahTotalGofood').textContent = formatRupiahDash(res.totalGofood || 0);
+  document.getElementById('mamahGrandTotal').textContent = 'Grand Total ' + formatRupiahDash(res.grandTotal || 0);
+
+  const wrap = document.getElementById('listMamah');
+  wrap.innerHTML = '';
+  const jmlHari = (res.rows || []).length;
+  (res.rows || []).forEach((r) => {
+    const row = document.createElement('div');
+    row.className = 'mamah-row';
+    const elTgl = document.createElement('span');
+    elTgl.className = 'mamah-tgl'; elTgl.textContent = r.tgl;
+    row.appendChild(elTgl);
+    const kolom = [r.qris, r.shopee, r.grab, r.gofood];
+    kolom.forEach((nilai) => {
+      const el = document.createElement('span');
+      el.className = 'mamah-num' + (nilai ? '' : ' is-nol');
+      el.textContent = formatRupiahDash(nilai);
+      row.appendChild(el);
+    });
+    const elT = document.createElement('span');
+    elT.className = 'mamah-num mamah-total' + (r.total ? '' : ' is-nol');
+    elT.textContent = formatRupiahDash(r.total);
+    row.appendChild(elT);
+    const kunci = (res.periodeLabel || '') + '|' + r.tgl;
+    const sudah = mamahReconTercatat(res.periodeLabel, kunci);
+    const box = document.createElement('input');
+    box.type = 'checkbox'; box.className = 'qris-check';
+    box.title = 'Uang sudah direcon ke mamah'; box.checked = sudah;
+    if (sudah) row.classList.add('is-cocok');
+    box.addEventListener('change', () => {
+      mamahReconSimpan(res.periodeLabel, kunci, box.checked);
+      row.classList.toggle('is-cocok', box.checked);
+      mamahReconHitung(res.periodeLabel, jmlHari);
+    });
+    row.appendChild(box);
+    wrap.appendChild(row);
+  });
+  mamahReconHitung(res.periodeLabel, jmlHari);
+}
+
+// --- Checkbox recon ke mamah (localStorage, per bulan) ---
+function mamahReconBaca() {
+  try { return JSON.parse(localStorage.getItem('mamahRecon') || '{}'); }
+  catch (e) { return {}; }
+}
+function mamahReconTercatat(periode, kunci) {
+  const semua = mamahReconBaca();
+  return !!(semua[periode] && semua[periode][kunci]);
+}
+function mamahReconSimpan(periode, kunci, nilai) {
+  try {
+    const semua = mamahReconBaca();
+    if (!semua[periode]) semua[periode] = {};
+    if (nilai) semua[periode][kunci] = 1; else delete semua[periode][kunci];
+    localStorage.setItem('mamahRecon', JSON.stringify(semua));
+  } catch (e) {}
+}
+function mamahReconHitung(periode, jmlHari) {
+  const semua = mamahReconBaca();
+  const jml = Object.keys(semua[periode] || {}).length;
+  const el = document.getElementById('mamahReconLabel');
+  if (el) el.textContent = (jmlHari || 0) > 0 ? jml + ' dari ' + jmlHari + ' hari recon' : '';
 }
 function renderOjolList(res, prefix){
   var cap = prefix.charAt(0).toUpperCase()+prefix.slice(1);
