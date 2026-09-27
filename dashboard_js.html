@@ -12,7 +12,7 @@ let sedangMuat = false;
 // Versi dashboard — tampil di header ("Dashboard Owner · vX.Y").
 // Naikkan setiap rilis supaya owner bisa pastikan tablet/browser
 // sudah memuat kode terbaru (bukan cache lama).
-const APP_VERSION = '2.14';
+const APP_VERSION = '2.15';
 
 function formatRupiahDash(angka) {
   return 'Rp ' + Math.round(Number(angka) || 0).toLocaleString('id-ID');
@@ -438,17 +438,19 @@ function renderArusKas(res) {
 
   const wrap = document.getElementById('listArusKas');
   wrap.innerHTML = '';
+
+  // Pola render sama seperti renderQrisList (terbukti tampil) — nilai
+  // semuanya angka dari server, aman dari injeksi markup.
+  var html = '';
   (res.rows || []).forEach((r) => {
-    const row = document.createElement('div');
-    row.className = 'qris-row';
-    const elTgl = document.createElement('span'); elTgl.className = 'qris-jam'; elTgl.textContent = r.tgl;
-    const elCash = document.createElement('span'); elCash.className = 'qris-sumber'; elCash.textContent = 'Cash ' + formatRupiahDash(r.cash);
-    const leader = document.createElement('span'); leader.className = 'qris-leader';
-    const elNilai = document.createElement('span'); elNilai.className = 'qris-nilai';
-    elNilai.textContent = 'B ' + formatRupiahDash(r.belanja) + ' · S ' + formatRupiahDash(r.setor);
-    row.appendChild(elTgl); row.appendChild(elCash); row.appendChild(leader); row.appendChild(elNilai);
-    wrap.appendChild(row);
+    html += '<div class="qris-row">'
+      + '<span class="qris-jam">' + r.tgl + '</span>'
+      + '<span class="qris-sumber">Cash ' + formatRupiahDash(r.cash) + '</span>'
+      + '<span class="qris-leader"></span>'
+      + '<span class="qris-nilai">B ' + formatRupiahDash(r.belanja) + ' · S ' + formatRupiahDash(r.setor) + '</span>'
+      + '</div>';
   });
+  wrap.innerHTML = html;
 }
 function renderQrisList(res) {
   document.getElementById('qrisTotalLabel').textContent =
@@ -479,15 +481,52 @@ function renderQrisList(res) {
     const isVoid = n.status === 'VOID';
     const row = document.createElement('div');
     row.className = 'qris-row' + (isVoid ? ' is-void' : '');
+    // Checkbox pencocokan mutasi bank — murni bantuan visual lokal
+    // (localStorage per hari), tidak mengubah data server.
+    const kunciCocok = (n.tglStr || '') + '|' + (n.jam || '') + '|' + (n.total || 0) + '|' + (n.sumber || '');
+    const sudahCocok = qrisCocokTercatat(res.periodeLabel, kunciCocok);
+    if (sudahCocok) row.classList.add('is-cocok');
     row.innerHTML = `
       <span class="qris-jam">${n.jam}</span>
       <span class="qris-sumber">${n.sumber}</span>
       <span class="qris-leader"></span>
+      <input type="checkbox" class="qris-check" title="Sudah cocok mutasi bank"${sudahCocok ? ' checked' : ''} />
       <span class="qris-nilai">${formatRupiahDash(n.total)}</span>
       ${isVoid ? '<span class="qris-badge-void">VOID</span>' : ''}
     `;
+    const box = row.querySelector('.qris-check');
+    if (box) box.addEventListener('change', () => {
+      qrisCocokSimpan(res.periodeLabel, kunciCocok, box.checked);
+      row.classList.toggle('is-cocok', box.checked);
+      qrisCocokHitung(res.periodeLabel);
+    });
     wrap.appendChild(row);
   });
+  qrisCocokHitung(res.periodeLabel);
+}
+
+// --- Checkbox cocok mutasi QRIS (localStorage, per hari) ---
+function qrisCocokBaca() {
+  try { return JSON.parse(localStorage.getItem('qrisCocok') || '{}'); }
+  catch (e) { return {}; }
+}
+function qrisCocokTercatat(periode, kunci) {
+  const semua = qrisCocokBaca();
+  return !!(semua[periode] && semua[periode][kunci]);
+}
+function qrisCocokSimpan(periode, kunci, nilai) {
+  try {
+    const semua = qrisCocokBaca();
+    if (!semua[periode]) semua[periode] = {};
+    if (nilai) semua[periode][kunci] = 1; else delete semua[periode][kunci];
+    localStorage.setItem('qrisCocok', JSON.stringify(semua));
+  } catch (e) {}
+}
+function qrisCocokHitung(periode) {
+  const semua = qrisCocokBaca();
+  const jml = Object.keys(semua[periode] || {}).length;
+  const el = document.getElementById('qrisCocokLabel');
+  if (el) el.textContent = jml > 0 ? jml + ' cocok mutasi' : '';
 }
 function renderOjolList(res, prefix){
   var cap = prefix.charAt(0).toUpperCase()+prefix.slice(1);

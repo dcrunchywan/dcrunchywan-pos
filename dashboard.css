@@ -378,6 +378,20 @@ html, body {
 .qris-row.is-void .qris-jam,
 .qris-row.is-void .qris-sumber { color: var(--text-dim); text-decoration: line-through; }
 .qris-row.is-void .qris-nilai { color: var(--text-dim); text-decoration: line-through; }
+.qris-check {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ok, #2ecc71);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.qris-row.is-cocok .qris-nilai { color: var(--ok, #2ecc71); }
+.qris-cocok {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin: 0 0 10px;
+  min-height: 1em;
+}
 
 /* ---------- Log Dapur (goreng ayam, ayam terjual, pemakaian minyak) ---------- */
 .kpi-strip-dapur { grid-template-columns: repeat(3, 1fr); margin-bottom: 22px; }
