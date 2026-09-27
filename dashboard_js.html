@@ -12,7 +12,7 @@ let sedangMuat = false;
 // Versi dashboard — tampil di header ("Dashboard Owner · vX.Y").
 // Naikkan setiap rilis supaya owner bisa pastikan tablet/browser
 // sudah memuat kode terbaru (bukan cache lama).
-const APP_VERSION = '2.15';
+const APP_VERSION = '2.16';
 
 function formatRupiahDash(angka) {
   return 'Rp ' + Math.round(Number(angka) || 0).toLocaleString('id-ID');
@@ -434,7 +434,7 @@ function renderArusKas(res) {
   document.getElementById('arusKasTotalSetor').textContent = formatRupiahDash(res.totalSetor || 0);
   var gt = document.getElementById('arusKasGrandTotal');
   gt.textContent = 'Grand Total ' + formatRupiahDash(res.grandTotal || 0);
-  gt.style.color = (res.grandTotal || 0) < 0 ? 'var(--danger, #e5484d)' : '';
+  gt.style.color = (Math.sign(res.grandTotal || 0) === -1) ? 'var(--danger, #e5484d)' : '';
 
   const wrap = document.getElementById('listArusKas');
   wrap.innerHTML = '';
@@ -573,7 +573,7 @@ function renderDapurList(res) {
   }
 
   res.daftarAktivitas.forEach((a) => {
-    const negatif = a.jumlah < 0;
+    const negatif = (Math.sign(a.jumlah || 0) === -1);
     const row = document.createElement('div');
     row.className = 'dapur-row';
     row.innerHTML = `
