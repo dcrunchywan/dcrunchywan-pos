@@ -483,23 +483,34 @@ function renderQrisList(res) {
     row.className = 'qris-row' + (isVoid ? ' is-void' : '');
     // Checkbox pencocokan mutasi bank — murni bantuan visual lokal
     // (localStorage per hari), tidak mengubah data server.
+    // Dibangun via DOM API (bukan string HTML) supaya file lolos
+    // parse HtmlService saat di-include.
+    const elJam = document.createElement('span');
+    elJam.className = 'qris-jam'; elJam.textContent = n.jam;
+    const elSumber = document.createElement('span');
+    elSumber.className = 'qris-sumber'; elSumber.textContent = n.sumber;
+    const leader = document.createElement('span');
+    leader.className = 'qris-leader';
     const kunciCocok = (n.tglStr || '') + '|' + (n.jam || '') + '|' + (n.total || 0) + '|' + (n.sumber || '');
     const sudahCocok = qrisCocokTercatat(res.periodeLabel, kunciCocok);
+    const box = document.createElement('input');
+    box.type = 'checkbox'; box.className = 'qris-check';
+    box.title = 'Sudah cocok mutasi bank'; box.checked = sudahCocok;
     if (sudahCocok) row.classList.add('is-cocok');
-    row.innerHTML = `
-      <span class="qris-jam">${n.jam}</span>
-      <span class="qris-sumber">${n.sumber}</span>
-      <span class="qris-leader"></span>
-      <input type="checkbox" class="qris-check" title="Sudah cocok mutasi bank"${sudahCocok ? ' checked' : ''} />
-      <span class="qris-nilai">${formatRupiahDash(n.total)}</span>
-      ${isVoid ? '<span class="qris-badge-void">VOID</span>' : ''}
-    `;
-    const box = row.querySelector('.qris-check');
-    if (box) box.addEventListener('change', () => {
+    box.addEventListener('change', () => {
       qrisCocokSimpan(res.periodeLabel, kunciCocok, box.checked);
       row.classList.toggle('is-cocok', box.checked);
       qrisCocokHitung(res.periodeLabel);
     });
+    const elNilai = document.createElement('span');
+    elNilai.className = 'qris-nilai'; elNilai.textContent = formatRupiahDash(n.total);
+    row.appendChild(elJam); row.appendChild(elSumber); row.appendChild(leader);
+    row.appendChild(box); row.appendChild(elNilai);
+    if (isVoid) {
+      const badge = document.createElement('span');
+      badge.className = 'qris-badge-void'; badge.textContent = 'VOID';
+      row.appendChild(badge);
+    }
     wrap.appendChild(row);
   });
   qrisCocokHitung(res.periodeLabel);
