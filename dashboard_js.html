@@ -12,7 +12,7 @@ let sedangMuat = false;
 // Versi dashboard — tampil di header ("Dashboard Owner · vX.Y").
 // Naikkan setiap rilis supaya owner bisa pastikan tablet/browser
 // sudah memuat kode terbaru (bukan cache lama).
-const APP_VERSION = '2.17';
+const APP_VERSION = '2.18';
 
 function formatRupiahDash(angka) {
   return 'Rp ' + Math.round(Number(angka) || 0).toLocaleString('id-ID');
@@ -441,16 +441,24 @@ function renderArusKas(res) {
 
   // Pola render sama seperti renderQrisList (terbukti tampil) — nilai
   // semuanya angka dari server, aman dari injeksi markup.
-  var html = '';
+  // Dibangun via DOM API (bukan string HTML): string tag yang terpotong
+  // di tengah membuat HtmlService meng-escape plus menjadi entitas
+  // sehingga seluruh script mati. Pola ini terbukti lolos parse.
   (res.rows || []).forEach((r) => {
-    html += '<div class="aruskas-row">'
-      + '<span class="aruskas-tgl">' + r.tgl + '</span>'
-      + '<span class="aruskas-num' + (r.cash ? '' : ' is-nol') + '">' + formatRupiahDash(r.cash) + '</span>'
-      + '<span class="aruskas-num' + (r.belanja ? '' : ' is-nol') + '">' + formatRupiahDash(r.belanja) + '</span>'
-      + '<span class="aruskas-num' + (r.setor ? '' : ' is-nol') + '">' + formatRupiahDash(r.setor) + '</span>'
-      + '</div>';
+    const row = document.createElement('div');
+    row.className = 'aruskas-row';
+    const elTgl = document.createElement('span');
+    elTgl.className = 'aruskas-tgl'; elTgl.textContent = r.tgl;
+    row.appendChild(elTgl);
+    const kolom = [r.cash, r.belanja, r.setor];
+    kolom.forEach((nilai) => {
+      const el = document.createElement('span');
+      el.className = 'aruskas-num' + (nilai ? '' : ' is-nol');
+      el.textContent = formatRupiahDash(nilai);
+      row.appendChild(el);
+    });
+    wrap.appendChild(row);
   });
-  wrap.innerHTML = html;
 }
 function renderQrisList(res) {
   document.getElementById('qrisTotalLabel').textContent =
