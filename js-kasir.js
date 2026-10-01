@@ -98,9 +98,9 @@
     });
 
     return {
-      stokMentah: Math.max(0, mentah),
-      stokEtalase: Math.max(0, etalase),
-      stokMinyakBaku: Math.max(0, minyak)
+      stokMentah: mentah,
+      stokEtalase: etalase,
+      stokMinyakBaku: minyak
     };
   }
 

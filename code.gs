@@ -441,7 +441,10 @@ function potongStokBahanBakuKasirBatch(ss, deduksiMap) {
     var namaBarang = data[i][0] ? data[i][0].toString().trim().toLowerCase() : "";
     if (namaBarang !== "" && deduksiMap.hasOwnProperty(namaBarang)) {
       var stokLama = Number(data[i][1]) || 0;
-      data[i][1] = Math.max(0, stokLama - deduksiMap[namaBarang]);
+      // Sengaja TIDAK di-clamp ke 0: kalau terjual melebihi stok, angka
+      // minus yang TAMPAK justru jadi alarm (lihat pelajaran stok ayam
+      // Sep 2026 yang clamp-nya menyembunyikan goreng tanpa stok).
+      data[i][1] = stokLama - deduksiMap[namaBarang];
       adaPerubahan = true;
     }
   }
@@ -453,7 +456,9 @@ function potongStokBahanBakuKasirBatch(ss, deduksiMap) {
 
 // Sesuaikan (tambah/kurang) stok SATU barang di sheet "Stok Barang"
 // berdasarkan nama (case-insensitive). delta boleh positif (nambah) atau
-// negatif (mengurangi, hasil akhirnya di-clamp ke 0 -- tidak pernah minus).
+// negatif (mengurangi). Hasil akhir TIDAK di-clamp ke 0: minus yang tampil
+// (mis. goreng 20 saat freezer 0 -> -20) adalah alarm "aktivitas tanpa
+// stok" -- penguncian nol lama menyembunyikan pemakaian melebihi stok.
 // Kalau nama barang belum ada barisnya, baris baru otomatis dibuat.
 //
 // Ini "angka berjalan" (running value): dipanggil LANGSUNG di titik
@@ -474,13 +479,13 @@ function sesuaikanStokBarang(ss, namaBarang, delta) {
       var namaBaris = data[i][0] ? data[i][0].toString().trim().toLowerCase() : "";
       if (namaBaris === namaLower) {
         var stokLama = Number(data[i][1]) || 0;
-        sheetStok.getRange(i + 2, 2).setValue(Math.max(0, stokLama + delta));
+        sheetStok.getRange(i + 2, 2).setValue(stokLama + delta);
         return;
       }
     }
   }
   // Barang belum pernah ada -- buat baris baru.
-  sheetStok.appendRow([namaBarang, Math.max(0, delta)]);
+  sheetStok.appendRow([namaBarang, delta]);
 }
 
 function catatOpnameBarang(namaBarang, stokSistem, stokFisik, selisih) {
@@ -573,7 +578,7 @@ function ambilInfoStokAyam() {
         }
       }
     }
-    return { stokMentah: Math.max(0, stokFreezer), stokEtalase: Math.max(0, stokEtalase), stokMinyakBaku: stokMinyak };
+    return { stokMentah: stokFreezer, stokEtalase: stokEtalase, stokMinyakBaku: stokMinyak };
   } catch(e) { return { stokMentah: 0, stokEtalase: 0, stokMinyakBaku: 0 }; }
 }
 
