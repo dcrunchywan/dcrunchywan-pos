@@ -614,6 +614,44 @@ function simpanLogOperasional(logData) {
     var waktuAktivitas = new Date();
     var qty = Math.abs(Number(logData.qty));
 
+    // ANTI DOUBLE-TAP BERDASAR ISI (kasus 5x "goreng 22" 02/10/2026):
+    // tiap tap manusia membawa clientTxnId BARU sehingga cek ID di atas
+    // tidak bisa menahan tap ulang (dialog "Input identik?" pun dijawab
+    // Ya karena server lambat dikira gagal). Maka tolak entri IDENTIK
+    // (jenis+qty) yang sudah tercatat dalam 2 menit terakhir — berlaku
+    // lintas perangkat. Kembalian "Sukses (...)" agar antrean kasir
+    // menggeser itemnya (tidak retry selamanya), tapi stok TIDAK diubah.
+    // Trade-off jujur: batch kembar yang SAH dalam 2 menit ikut tertahan
+    // sekali — ulangi setelah 2 menit atau gabung qty-nya.
+    var DEDUP_MENIT_DAPUR = 2;
+    var jenisDup = (logData.jenisAktivitas || "").toString();
+    var kunciJenisDup = null, kunciQtyDup = 0;
+    if (jenisDup === "Goreng Ayam") { kunciJenisDup = "Goreng Ayam (Ambil Mentah)"; kunciQtyDup = -qty; }
+    else if (jenisDup === "Ayam Masuk") { kunciJenisDup = "Ayam Masuk"; kunciQtyDup = qty; }
+    else if (jenisDup === "Ayam Waste") { kunciJenisDup = "Ayam Rusak / Waste"; kunciQtyDup = -qty; }
+    if (kunciJenisDup) {
+      var lastLogDup = sheetLogStok.getLastRow();
+      if (lastLogDup > 1) {
+        var cekDari = Math.max(2, lastLogDup - 60);
+        var dataCek = sheetLogStok.getRange(cekDari, 1, lastLogDup - cekDari + 1, 4).getValues();
+        var batasWaktu = waktuAktivitas.getTime() - DEDUP_MENIT_DAPUR * 60000;
+        for (var dd = 0; dd < dataCek.length; dd++) {
+          var tCek = dataCek[dd][0];
+          if (!(tCek instanceof Date) || tCek.getTime() < batasWaktu) continue;
+          if (dataCek[dd][1] && dataCek[dd][1].toString() === kunciJenisDup && Number(dataCek[dd][3]) === kunciQtyDup) {
+            if (logData.clientTxnId && sheetProcessed) {
+              try {
+                var lastRowP2 = getRealLastRow(sheetProcessed);
+                sheetProcessed.getRange(lastRowP2 + 1, 3, 1, 1).setNumberFormat("@");
+                sheetProcessed.getRange(lastRowP2 + 1, 1, 1, 3).setValues([[logData.clientTxnId, new Date(), Utilities.formatDate(waktuAktivitas, "Asia/Jakarta", "dd/MM/yyyy HH:mm:ss")]]);
+              } catch(eP2) {}
+            }
+            return "Sukses (duplikat isi ditolak: " + jenisDup + " " + qty + " sudah tercatat <2 mnt)";
+          }
+        }
+      }
+    }
+
     // PENTING: Log_Stok_Ayam sekarang murni CATATAN RIWAYAT aktivitas dapur
     // (dipakai buat rekap per hari di dashboard) -- angka stok saat ini
     // (Ayam Mentah/Matang di sheet "Stok Barang") di-update LANGSUNG lewat
