@@ -39,8 +39,8 @@ function doGet(e) {
       data = ambilInfoStokAyam();
     } else if (aksi === "catatStokHarian") {
       data = { hasil: catatSnapshotStokHarian(e.parameter.sumber || "MANUAL") };
-    } else if (aksi === "pasangTriggerStok") {
-      data = { hasil: pasangTriggerSnapshotStok() };
+    } else if (aksi === "snapshotAuto") {
+      data = { hasil: _pastikanSnapshotStokHarian() };
     } else if (aksi === "ambilStokHarian") {
       data = ambilStokHarian(e.parameter.bulan, e.parameter.tahun);
     } else if (aksi === "ambilStokBarang") {
@@ -601,32 +601,33 @@ function _sheetStokHarian() {
   return sh;
 }
 
+function _tglSnapshotTeks(v) {
+  if (v instanceof Date) {
+    try { return Utilities.formatDate(v, "Asia/Jakarta", "dd/MM/yyyy"); } catch (e) { return ""; }
+  }
+  return v ? v.toString().trim() : "";
+}
+
 function catatSnapshotStokHarian(sumber) {
   var lock = LockService.getScriptLock();
   try {
     if (!lock.tryLock(10000)) return "Skip: sibuk";
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sh = _sheetStokHarian();
     var tgl = Utilities.formatDate(new Date(), "Asia/Jakarta", "dd/MM/yyyy");
     var last = getRealLastRow(sh);
-    var sudah = false;
+    var barisHariIni = 0;
+    var kolA = [];
     if (last >= 2) {
-      var kolA = sh.getRange(2, 1, last - 1, 1).getValues();
+      kolA = sh.getRange(2, 1, last - 1, 1).getValues();
       for (var i = 0; i < kolA.length; i++) {
-        if (kolA[i][0] && kolA[i][0].toString().trim() === tgl) { sudah = true; break; }
+        if (_tglSnapshotTeks(kolA[i][0]) === tgl) { barisHariIni = i + 2; break; }
       }
     }
-    if (sudah && sumber !== "MANUAL") return "Sudah ada: " + tgl;
-
     var stok = ambilInfoStokAyam();
-    if (sudah) {
-      // MANUAL: perbarui baris hari ini (koreksi setelah opname)
-      for (var j = 0; j < kolA.length; j++) {
-        if (kolA[j][0] && kolA[j][0].toString().trim() === tgl) {
-          sh.getRange(j + 2, 2, 1, 5).setValues([[stok.stokMentah, stok.stokEtalase, stok.stokMinyakBaku, new Date(), sumber]]);
-          return "Diperbarui: " + tgl;
-        }
-      }
+    if (barisHariIni) {
+      // Baris hari ini selalu diperbarui → nilai terakhir hari itu = stok penutup.
+      sh.getRange(barisHariIni, 2, 1, 5).setValues([[stok.stokMentah, stok.stokEtalase, stok.stokMinyakBaku, new Date(), sumber]]);
+      return "Diperbarui: " + tgl;
     }
     sh.appendRow([tgl, stok.stokMentah, stok.stokEtalase, stok.stokMinyakBaku, new Date(), sumber]);
     return "Dicatat: " + tgl;
@@ -637,25 +638,15 @@ function catatSnapshotStokHarian(sumber) {
   }
 }
 
-// Dipanggil dari jalur baca stok; hanya sekali per hari (cache 6 jam).
+// Dipanggil dari jalur baca stok. Digerbangi per 10 menit supaya tidak
+// menulis terus-menerus, tapi nilai penutup hari tetap mendekati aktivitas
+// terakhir. Tidak memakai trigger/timezone scope apa pun.
 function _pastikanSnapshotStokHarian() {
-  try {
-    var cache = CacheService.getScriptCache();
-    var key = "snapStok_" + Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyyMMdd");
-    if (cache.get(key)) return;
-    cache.put(key, "1", 21600); // pasang dulu supaya tidak rekursi lewat ambilInfoStokAyam
-    catatSnapshotStokHarian("OTOMATIS");
-  } catch (e) {}
-}
-
-// Pasang trigger harian 23:55 (idempoten — tidak dobel kalau dipanggil 2x).
-function pasangTriggerSnapshotStok() {
-  var ada = ScriptApp.getProjectTriggers().filter(function(t) {
-    return t.getHandlerFunction() === "catatSnapshotStokHarian";
-  });
-  if (ada.length > 0) return "Trigger sudah ada (" + ada.length + ")";
-  ScriptApp.newTrigger("catatSnapshotStokHarian").timeBased().atHour(23).nearMinute(55).everyDays(1).create();
-  return "Trigger dipasang: harian 23:55";
+  var cache = CacheService.getScriptCache();
+  var kunci = "snapStok_" + Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyyMMddHHmm").substring(0, 11);
+  if (cache.get(kunci)) return "Skip: baru saja";
+  cache.put(kunci, "1", 600);
+  return catatSnapshotStokHarian("OTOMATIS");
 }
 
 // Baca snapshot (opsional filter bulan/tahun). Tanggal disimpan sebagai teks
@@ -668,7 +659,7 @@ function ambilStokHarian(bulan, tahun) {
     var rows = sh.getRange(2, 1, last - 1, 6).getValues();
     var daftar = [];
     for (var i = 0; i < rows.length; i++) {
-      var tglTeks = rows[i][0] ? rows[i][0].toString().trim() : "";
+      var tglTeks = _tglSnapshotTeks(rows[i][0]);
       var bagian = tglTeks.split("/");
       if (bagian.length !== 3) continue;
       if (bulan && Number(bagian[1]) !== Number(bulan)) continue;
