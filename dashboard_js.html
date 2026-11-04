@@ -239,6 +239,7 @@ function muatUlangData() {
       btn.classList.remove('is-loading');
       if (!res || res.status !== 'ok') { tampilkanError(); return; }
       renderDapurList(res);
+      google.script.run.withSuccessHandler(gambarRekonsiliasi).withFailureHandler(function() {}).ambilRekonsiliasi();
     };
     google.script.run.withSuccessHandler(onSuksesDapur).withFailureHandler(onGagal)
       .ambilLogDapurHarian(parseInt(bagian[2], 10), parseInt(bagian[1], 10), parseInt(bagian[0], 10));
@@ -723,6 +724,26 @@ function kategoriLogDash(jenis) {
   if (j.indexOf('jual') !== -1 || j.indexOf('void') !== -1 || j.indexOf('penjualan') !== -1) return 'PENJUALAN';
   return 'STOK';
 }
+function gambarRekonsiliasi(res) {
+  var el = document.getElementById('dapurRekonBadge');
+  if (!el) return;
+  if (!res || res.status === 'belum_ada') { el.style.display = 'none'; return; }
+  if (res.status !== 'ok') {
+    el.className = 'rekon-badge warn';
+    el.textContent = 'Cek stok: gagal dihitung';
+    el.style.display = 'inline-block';
+    return;
+  }
+  el.style.display = 'inline-block';
+  if (res.selisih === 0) {
+    el.className = 'rekon-badge ok';
+    el.textContent = 'Freezer cocok dengan patokan ' + res.patokanTanggal + ' (' + res.patokan + ' → ' + res.aktual + ')';
+  } else {
+    el.className = 'rekon-badge warn';
+    el.textContent = 'Freezer selisih ' + res.selisih + ' dari patokan ' + res.patokanTanggal + ' — seharusnya ' + res.expected + ', tercatat ' + res.aktual + (res.adaOpname ? ' (ada opname)' : '');
+  }
+}
+
 function setDapurFilter(f) {
   dapurFilter = f;
   ['semua', 'STOK', 'DAPUR'].forEach(function(k) {

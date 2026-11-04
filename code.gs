@@ -43,6 +43,8 @@ function doGet(e) {
       data = { hasil: _pastikanSnapshotStokHarian() };
     } else if (aksi === "ambilStokHarian") {
       data = ambilStokHarian(e.parameter.bulan, e.parameter.tahun);
+    } else if (aksi === "ambilRekonsiliasi") {
+      data = cekRekonsiliasiFreezer();
     } else if (aksi === "ambilStokBarang") {
       data = ambilStokBarang();
     } else if (aksi === "ambilLogDapurHariIni") {
@@ -676,6 +678,78 @@ function ambilStokHarian(bulan, tahun) {
     return { status: "ok", daftar: daftar };
   } catch (e) {
     return { status: "error", error: e.toString(), daftar: [] };
+  }
+}
+
+// Cek rekonsiliasi freezer: snapshot terakhir (sebelum hari ini) + seluruh
+// perubahan log sejak snapshot itu harus sama dengan stok sekarang.
+// Freezer dipilih karena semua perubahannya tercatat (masuk, goreng, opname);
+// etalase tidak bisa dicek begini karena penjualan tidak ditulis ke log.
+function cekRekonsiliasiFreezer() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var shSnap = _sheetStokHarian();
+    var lastSnap = getRealLastRow(shSnap);
+    if (lastSnap < 2) return { status: "belum_ada" };
+
+    var snaps = shSnap.getRange(2, 1, lastSnap - 1, 5).getValues();
+    var hariIni = Utilities.formatDate(new Date(), "Asia/Jakarta", "dd/MM/yyyy");
+    var patokan = null;
+    for (var i = snaps.length - 1; i >= 0; i--) {
+      var t = _tglSnapshotTeks(snaps[i][0]);
+      if (t && t !== hariIni) {
+        patokan = {
+          tanggal: t,
+          freezer: Number(snaps[i][1]),
+          waktu: snaps[i][4] instanceof Date ? snaps[i][4].getTime() : null
+        };
+        break;
+      }
+    }
+    if (!patokan) return { status: "belum_ada" };
+
+    // Batas waktu: waktu snapshot dicatat. Kalau tidak ada, akhir hari patokan.
+    var batasMs = patokan.waktu;
+    if (!batasMs) {
+      var b = patokan.tanggal.split("/");
+      batasMs = new Date(Number(b[2]), Number(b[1]) - 1, Number(b[0]), 23, 59, 59).getTime();
+    }
+
+    var shLog = ss.getSheetByName("Log_Stok_Ayam");
+    var lastLog = getRealLastRow(shLog);
+    var delta = 0, adaOpname = false, baris = 0;
+    if (lastLog >= 2) {
+      var rows = shLog.getRange(2, 1, lastLog - 1, 4).getValues();
+      for (var j = 0; j < rows.length; j++) {
+        var tgl = rows[j][0];
+        if (!(tgl instanceof Date)) continue;
+        if (tgl.getTime() <= batasMs) continue;
+        var jenis = (rows[j][1] || "").toString();
+        var qty = Number(rows[j][3]) || 0;
+        if (jenis === "Ayam Masuk" || jenis === "Goreng Ayam (Ambil Mentah)") {
+          delta += qty;
+          baris++;
+        } else if (jenis.indexOf("Freezer") !== -1 && jenis.indexOf("Approved Owner") !== -1) {
+          adaOpname = true;
+        }
+      }
+    }
+
+    var aktual = ambilInfoStokAyam().stokMentah;
+    var expected = patokan.freezer + delta;
+    return {
+      status: "ok",
+      patokanTanggal: patokan.tanggal,
+      patokan: patokan.freezer,
+      perubahan: delta,
+      expected: expected,
+      aktual: aktual,
+      selisih: aktual - expected,
+      adaOpname: adaOpname,
+      barisLog: baris
+    };
+  } catch (e) {
+    return { status: "error", error: e.toString() };
   }
 }
 
