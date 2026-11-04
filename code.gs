@@ -37,6 +37,9 @@ function doGet(e) {
     } else if (aksi === "ambilStokAyam") {
       try { _pastikanSnapshotStokHarian(); } catch (eSnap) {}
       data = ambilInfoStokAyam();
+    } else if (aksi === "ambilLiveDapur") {
+      try { _pastikanSnapshotStokHarian(); } catch (eSnap2) {}
+      data = ambilLiveDapur();
     } else if (aksi === "catatStokHarian") {
       data = { hasil: catatSnapshotStokHarian(e.parameter.sumber || "MANUAL") };
     } else if (aksi === "snapshotAuto") {
@@ -751,6 +754,16 @@ function cekRekonsiliasiFreezer() {
   } catch (e) {
     return { status: "error", error: e.toString() };
   }
+}
+
+// Satu panggilan untuk panel Dapur: stok + ringkasan/log hari ini.
+// Menggantikan 2 roundtrip terpisah tanpa mengubah sumber angka (tetap sheet).
+function ambilLiveDapur() {
+  return {
+    status: "ok",
+    stok: ambilInfoStokAyam(),
+    ringkasan: ambilLogDapurHariIni()
+  };
 }
 
 function ambilInfoStokAyam() {

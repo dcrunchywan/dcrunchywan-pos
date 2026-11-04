@@ -122,6 +122,32 @@
       });
   }
 
+  // Satu request untuk stok + ringkasan/log hari ini (menggantikan 2 fetch
+  // berurutan). Angka tetap dari server/sheet; tidak ada cache stok di sini.
+  function loadLiveDapur() {
+    setStokAyamStatusBadge('loading');
+    setDapurStatusBadge('loading');
+    fetch(`${API_URL}?aksi=ambilLiveDapur&t=${Date.now()}`)
+      .then(res => res.json())
+      .then(res => {
+        if (!res || res.status !== 'ok' || !res.stok || !res.ringkasan) throw new Error('Respon tidak valid');
+        tampilkanStokAyam(res.stok);
+        localStorage.setItem('cache_stok_ayam', JSON.stringify(res.stok));
+        setStokAyamStatusBadge('terkini');
+        tampilkanRingkasanDapur(res.ringkasan);
+        localStorage.setItem('cache_ringkasan_dapur', JSON.stringify({ data: res.ringkasan, waktu: new Date().toISOString() }));
+        setDapurStatusBadge('terkini');
+        if (!isOwnerAuthenticated || !document.getElementById('kasirLogTanggalPicker')?.value || isKasirLogPickerHariIni()) {
+          renderKasirLogDapurGabungan(res.ringkasan);
+        }
+      })
+      .catch(err => {
+        console.log('Live dapur gagal, fallback ke pemisah:', err);
+        loadStokAyam();
+        loadRingkasanDapurHariIni();
+      });
+  }
+
   // Ringkasan HARI INI (ayam digoreng, ayam terjual, pemakaian minyak) di
   // tab Dapur. Kalau fetch gagal (offline), JANGAN cuma diamkan angka lama
   // apa adanya -- itu justru bisa membuat karyawan mengira input barusan
@@ -1769,7 +1795,7 @@ const clientTxnId = crypto.randomUUID
         var ok = res && res.status === "Sukses" && hasilStr.indexOf("Error") !== 0;
         if (ok) {
           var q=JSON.parse(localStorage.getItem('sync_queue_opr')); q.shift(); localStorage.setItem('sync_queue_opr', JSON.stringify(q));
-          attemptSync(); loadRingkasanDapurHariIni(); loadLogDapurKasir(); loadStokAyam();
+          attemptSync(); loadLiveDapur();
         } else {
           console.log("simpanDapur gagal, tetap di queue untuk retry", res);
         }

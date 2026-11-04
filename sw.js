@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dcrunchywan-pos-cache-v19';
+const CACHE_NAME = 'dcrunchywan-pos-cache-v20';
 const urlsToCache = [
   './',
   './index.html',
