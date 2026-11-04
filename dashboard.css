@@ -523,6 +523,27 @@ html, body {
 .rekon-badge.ok { color: #7ee0a1; border-color: rgba(126, 224, 161, 0.4); }
 .rekon-badge.warn { color: #ffcc66; border-color: rgba(255, 204, 102, 0.45); }
 
+/* ---------- Snapshot stok harian ---------- */
+.snap-wrap { display: flex; flex-direction: column; gap: 6px; }
+.snap-empty { font-size: 0.75rem; color: var(--text-dim); padding: 8px 2px; }
+.snap-row {
+  display: grid;
+  grid-template-columns: 1.1fr 0.8fr 0.8fr 0.8fr 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.75rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.snap-head { background: transparent; border: none; color: var(--text-dim); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0 12px 4px; }
+.snap-tgl { color: var(--text-dim); }
+.snap-val { font-weight: 600; }
+.snap-delta { font-size: 0.7rem; color: var(--text-dim); }
+.snap-delta.naik { color: #7ee0a1; }
+.snap-delta.turun { color: #ff9a76; }
+
 .dapur-list {
   display: flex;
   flex-direction: column;

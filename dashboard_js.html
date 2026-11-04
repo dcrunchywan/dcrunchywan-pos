@@ -240,6 +240,7 @@ function muatUlangData() {
       if (!res || res.status !== 'ok') { tampilkanError(); return; }
       renderDapurList(res);
       google.script.run.withSuccessHandler(gambarRekonsiliasi).withFailureHandler(function() {}).ambilRekonsiliasi();
+      muatSnapshotStok();
     };
     google.script.run.withSuccessHandler(onSuksesDapur).withFailureHandler(onGagal)
       .ambilLogDapurHarian(parseInt(bagian[2], 10), parseInt(bagian[1], 10), parseInt(bagian[0], 10));
@@ -724,6 +725,50 @@ function kategoriLogDash(jenis) {
   if (j.indexOf('jual') !== -1 || j.indexOf('void') !== -1 || j.indexOf('penjualan') !== -1) return 'PENJUALAN';
   return 'STOK';
 }
+function kunciTglSnap(t) {
+  var p = (t || '').split('/');
+  if (p.length !== 3) return 0;
+  return Number(p[2]) * 10000 + Number(p[1]) * 100 + Number(p[0]);
+}
+
+function muatSnapshotStok() {
+  google.script.run.withSuccessHandler(gambarSnapshotStok).withFailureHandler(function() {})
+    .ambilStokHarian();
+}
+
+function gambarSnapshotStok(res) {
+  var wrap = document.getElementById('snapStokList');
+  if (!wrap) return;
+  var daftar = (res && res.daftar) ? res.daftar.slice() : [];
+  if (daftar.length === 0) {
+    wrap.innerHTML = '<div class="snap-empty">Belum ada snapshot. Baris pertama akan tercatat otomatis hari ini.</div>';
+    return;
+  }
+  daftar.sort(function(a, b) { return kunciTglSnap(a.tanggal) - kunciTglSnap(b.tanggal); });
+
+  var html = '<div class="snap-row snap-head"><span>Tanggal</span><span>Freezer</span><span>Etalase</span><span>Minyak</span><span>Δ Freezer</span></div>';
+  var mulai = daftar.length - 10;
+  if (Math.sign(mulai) === -1) mulai = 0;
+  for (var i = daftar.length - 1; i >= mulai; i--) {
+    var d = daftar[i];
+    var delta = '—', kelas = 'snap-delta';
+    if (i > 0) {
+      var beda = Number(d.freezer) - Number(daftar[i - 1].freezer);
+      delta = (beda > 0 ? '+' : '') + beda;
+      if (beda > 0) kelas = 'snap-delta naik';
+      else if (Math.sign(beda) === -1) kelas = 'snap-delta turun';
+    }
+    html += '<div class="snap-row">'
+      + '<span class="snap-tgl">' + d.tanggal + '</span>'
+      + '<span class="snap-val">' + d.freezer + '</span>'
+      + '<span class="snap-val">' + d.etalase + '</span>'
+      + '<span class="snap-val">' + d.minyak + '</span>'
+      + '<span class="' + kelas + '">' + delta + '</span>'
+      + '</div>';
+  }
+  wrap.innerHTML = html;
+}
+
 function gambarRekonsiliasi(res) {
   var el = document.getElementById('dapurRekonBadge');
   if (!el) return;
