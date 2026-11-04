@@ -430,27 +430,33 @@ function simpanData(payloadData) {
 function potongStokBahanBakuKasirBatch(ss, deduksiMap) {
   var sheetStok = ss.getSheetByName("Stok Barang");
   if (!sheetStok) return;
-  var lastRow = sheetStok.getLastRow();
+  var lastRow = getRealLastRow(sheetStok);
   if (lastRow < 2) return;
 
-  var range = sheetStok.getRange(2, 1, lastRow - 1, 2);
-  var data = range.getValues();
-  var adaPerubahan = false;
-
-  for (var i = 0; i < data.length; i++) {
-    var namaBarang = data[i][0] ? data[i][0].toString().trim().toLowerCase() : "";
-    if (namaBarang !== "" && deduksiMap.hasOwnProperty(namaBarang)) {
-      var stokLama = Number(data[i][1]) || 0;
-      // Sengaja TIDAK di-clamp ke 0: kalau terjual melebihi stok, angka
-      // minus yang TAMPAK justru jadi alarm (lihat pelajaran stok ayam
-      // Sep 2026 yang clamp-nya menyembunyikan goreng tanpa stok).
-      data[i][1] = stokLama - deduksiMap[namaBarang];
-      adaPerubahan = true;
+  // KUNCI DOKUMEN: cegah dua eksekusi (2 kasir / kasir + dapur) saling
+  // menimpa. Dulu fungsi ini membaca SELURUH A2:B lalu menulis BALIK
+  // seluruh range -- perubahan stok yang terjadi di antara baca & tulis
+  // (kiriman ayam, goreng, opname) hilang tertimpa versi lama. Itu sebab
+  // stok freezer kehilangan 4 kiriman Oktober (1.170 ekor).
+  var lock = LockService.getDocumentLock();
+  try { lock.waitLock(15000); } catch (eLock) { /* lanjut: lebih baik potong daripada gagal total */ }
+  try {
+    var range = sheetStok.getRange(2, 1, lastRow - 1, 2);
+    var data = range.getValues();
+    // Tulis HANYA baris yang berubah (single-cell), jangan pernah menulis
+    // ulang seluruh tabel -- supaya sel stok lain tidak ikut tertimpa.
+    for (var i = 0; i < data.length; i++) {
+      var namaBarang = data[i][0] ? data[i][0].toString().trim().toLowerCase() : "";
+      if (namaBarang !== "" && deduksiMap.hasOwnProperty(namaBarang)) {
+        var stokLama = Number(data[i][1]) || 0;
+        // Sengaja TIDAK di-clamp ke 0: kalau terjual melebihi stok, angka
+        // minus yang TAMPAK justru jadi alarm (lihat pelajaran stok ayam
+        // Sep 2026 yang clamp-nya menyembunyikan goreng tanpa stok).
+        sheetStok.getRange(i + 2, 2).setValue(stokLama - deduksiMap[namaBarang]);
+      }
     }
-  }
-
-  if (adaPerubahan) {
-    range.setValues(data);
+  } finally {
+    try { lock.releaseLock(); } catch (eRel) {}
   }
 }
 
@@ -470,6 +476,11 @@ function potongStokBahanBakuKasirBatch(ss, deduksiMap) {
 function sesuaikanStokBarang(ss, namaBarang, delta) {
   var sheetStok = ss.getSheetByName("Stok Barang");
   if (!sheetStok) return;
+  // Kunci dokumen: read-modify-write satu sel pun bisa balapan antar
+  // eksekusi (2 kasir). Tanpa kunci, satu penjualan bisa "hilang".
+  var lock = LockService.getDocumentLock();
+  try { lock.waitLock(15000); } catch (eLock) {}
+  try {
   var namaLower = namaBarang.toString().trim().toLowerCase();
   var lastRow = getRealLastRow(sheetStok);
 
@@ -486,6 +497,9 @@ function sesuaikanStokBarang(ss, namaBarang, delta) {
   }
   // Barang belum pernah ada -- buat baris baru.
   sheetStok.appendRow([namaBarang, delta]);
+  } finally {
+    try { lock.releaseLock(); } catch (eRel) {}
+  }
 }
 
 function catatOpnameBarang(namaBarang, stokSistem, stokFisik, selisih) {
