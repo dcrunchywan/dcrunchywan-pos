@@ -250,6 +250,11 @@
       <div class="panel-head">
         <h2>Riwayat Aktivitas <span id="dapurPeriodeLabel"></span></h2>
       </div>
+      <div class="log-filter" id="dapurFilterBar">
+        <button type="button" class="log-chip on" id="dapurFilterSemua" onclick="setDapurFilter('semua')">Semua</button>
+        <button type="button" class="log-chip" id="dapurFilterSTOK" onclick="setDapurFilter('STOK')">Stok</button>
+        <button type="button" class="log-chip" id="dapurFilterDAPUR" onclick="setDapurFilter('DAPUR')">Dapur</button>
+      </div>
       <div class="dapur-list" id="listDapur"></div>
     </section>
 

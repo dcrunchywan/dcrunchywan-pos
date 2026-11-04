@@ -596,6 +596,13 @@ function ambilInfoStokAyam() {
   } catch(e) { return { stokMentah: 0, stokEtalase: 0, stokMinyakBaku: 0 }; }
 }
 
+function _kategoriLogStok(jenis) {
+  var j = (jenis || "").toString().toLowerCase();
+  if (j.indexOf("goreng") !== -1 || j.indexOf("minyak") !== -1) return "DAPUR";
+  if (j.indexOf("jual") !== -1 || j.indexOf("void") !== -1 || j.indexOf("penjualan") !== -1) return "PENJUALAN";
+  return "STOK"; // masuk supplier, waste, penyesuaian stok
+}
+
 function simpanLogOperasional(logData) {
   var lock = LockService.getScriptLock();
   try {
@@ -672,14 +679,14 @@ function simpanLogOperasional(logData) {
     // sesuaikanStokBarang() di titik kejadian, bukan dihitung ulang dengan
     // menjumlah log ini (lihat ambilInfoStokAyam()).
     if (logData.jenisAktivitas === "Ayam Masuk") {
-      sheetLogStok.appendRow([waktuAktivitas, "Ayam Masuk", "Freezer", qty, logData.keterangan || "Masuk dari Supplier"]);
+      sheetLogStok.appendRow([waktuAktivitas, "Ayam Masuk", "Freezer", qty, logData.keterangan || "Masuk dari Supplier", "STOK"]);
       // Pastikan kolom A tampil dengan jam (bukan hanya tanggal) — format datetime eksplisit
       try { sheetLogStok.getRange(sheetLogStok.getLastRow(), 1).setNumberFormat("dd/MM/yyyy HH:mm:ss"); } catch(eFmt) {}
       sesuaikanStokBarang(ss, "Ayam Mentah (Freezer)", qty);
     } else if (logData.jenisAktivitas === "Goreng Ayam") {
-      sheetLogStok.appendRow([waktuAktivitas, "Goreng Ayam (Ambil Mentah)", "Freezer", -qty, logData.keterangan || "Diambil untuk dimasak"]);
+      sheetLogStok.appendRow([waktuAktivitas, "Goreng Ayam (Ambil Mentah)", "Freezer", -qty, logData.keterangan || "Diambil untuk dimasak", "DAPUR"]);
       try { sheetLogStok.getRange(sheetLogStok.getLastRow(), 1).setNumberFormat("dd/MM/yyyy HH:mm:ss"); } catch(eFmt2) {}
-      sheetLogStok.appendRow([waktuAktivitas, "Goreng Ayam (Matang)", "Etalase", qty, logData.keterangan || "Selesai digoreng"]);
+      sheetLogStok.appendRow([waktuAktivitas, "Goreng Ayam (Matang)", "Etalase", qty, logData.keterangan || "Selesai digoreng", "DAPUR"]);
       try { sheetLogStok.getRange(sheetLogStok.getLastRow(), 1).setNumberFormat("dd/MM/yyyy HH:mm:ss"); } catch(eFmt3) {}
       sesuaikanStokBarang(ss, "Ayam Mentah (Freezer)", -qty);
       sesuaikanStokBarang(ss, "Ayam Matang (Etalase)", qty);
@@ -690,12 +697,12 @@ function simpanLogOperasional(logData) {
         // cuma langsung mengurangi angka stok tanpa jejak riwayat sama
         // sekali) -- supaya bisa direkap per hari di dashboard, sama
         // seperti ayam.
-        sheetLogStok.appendRow([waktuAktivitas, "Pemakaian Minyak", "Minyak", -qtyMinyak, logData.keterangan || "Dipakai saat menggoreng"]);
+        sheetLogStok.appendRow([waktuAktivitas, "Pemakaian Minyak", "Minyak", -qtyMinyak, logData.keterangan || "Dipakai saat menggoreng", "DAPUR"]);
         try { sheetLogStok.getRange(sheetLogStok.getLastRow(), 1).setNumberFormat("dd/MM/yyyy HH:mm:ss"); } catch(eFmt4) {}
         sesuaikanStokBarang(ss, "Minyak Goreng", -qtyMinyak);
       }
     } else if (logData.jenisAktivitas === "Ayam Waste") {
-      sheetLogStok.appendRow([waktuAktivitas, "Ayam Rusak / Waste", "Etalase", -qty, logData.keterangan || "Waste Dapur"]);
+      sheetLogStok.appendRow([waktuAktivitas, "Ayam Rusak / Waste", "Etalase", -qty, logData.keterangan || "Waste Dapur", "STOK"]);
       try { sheetLogStok.getRange(sheetLogStok.getLastRow(), 1).setNumberFormat("dd/MM/yyyy HH:mm:ss"); } catch(eFmt5) {}
       sesuaikanStokBarang(ss, "Ayam Matang (Etalase)", -qty);
     }
@@ -1561,7 +1568,7 @@ function ambilLogDapurHarian(tanggal, bulan, tahun) {
     var sheetLog = ss.getSheetByName("Log_Stok_Ayam");
     var lastRowLog = getRealLastRow(sheetLog);
     if (sheetLog && lastRowLog >= 2) {
-      var dataLog = sheetLog.getRange(2, 1, lastRowLog - 1, 5).getValues();
+      var dataLog = sheetLog.getRange(2, 1, lastRowLog - 1, 6).getValues();
       dataLog.forEach(function(row) {
         var tglRow = row[0];
         if (!(tglRow instanceof Date)) return;
@@ -1580,7 +1587,7 @@ function ambilLogDapurHarian(tanggal, bulan, tahun) {
         // diisi waktuAktivitas server di simpanLogOperasional().
         var jamStr = "";
         try { jamStr = Utilities.formatDate(tglRow, "Asia/Jakarta", "HH:mm"); } catch(eJam) { jamStr = ""; }
-        daftarAktivitas.push({ jenis: jenis, sektor: row[2] || "", jumlah: jumlah, keterangan: row[4] ? row[4].toString() : "", jam: jamStr, timestamp: tglRow.getTime() });
+        daftarAktivitas.push({ jenis: jenis, sektor: row[2] || "", jumlah: jumlah, keterangan: row[4] ? row[4].toString() : "", kategori: (row[5] ? row[5].toString().toUpperCase() : _kategoriLogStok(jenis)), jam: jamStr, timestamp: tglRow.getTime() });
       });
     }
 

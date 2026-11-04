@@ -715,7 +715,24 @@ function renderShopeeList(res){ renderOjolList(res,'shopee'); }
 function renderGrabList(res){ renderOjolList(res,'grab'); }
 function renderGofoodList(res){ renderOjolList(res,'gofood'); }
 
+var dapurFilter = 'semua';
+var dapurTerakhir = null;
+function kategoriLogDash(jenis) {
+  var j = (jenis || '').toString().toLowerCase();
+  if (j.indexOf('goreng') !== -1 || j.indexOf('minyak') !== -1) return 'DAPUR';
+  if (j.indexOf('jual') !== -1 || j.indexOf('void') !== -1 || j.indexOf('penjualan') !== -1) return 'PENJUALAN';
+  return 'STOK';
+}
+function setDapurFilter(f) {
+  dapurFilter = f;
+  ['semua', 'STOK', 'DAPUR'].forEach(function(k) {
+    var el = document.getElementById('dapurFilter' + (k === 'semua' ? 'Semua' : k));
+    if (el) el.classList.toggle('on', k === f);
+  });
+  if (dapurTerakhir) renderDapurList(dapurTerakhir);
+}
 function renderDapurList(res) {
+  dapurTerakhir = res;
   document.getElementById('kpiDapurGoreng').textContent = (res.ayamDigoreng || 0).toLocaleString('id-ID') + ' pcs';
   document.getElementById('kpiDapurTerjual').textContent = (res.ayamTerjual || 0).toLocaleString('id-ID') + ' pcs';
   document.getElementById('kpiDapurMinyak').textContent = (res.pemakaianMinyak || 0).toLocaleString('id-ID') + ' L';
@@ -729,7 +746,16 @@ function renderDapurList(res) {
     return;
   }
 
-  res.daftarAktivitas.forEach((a) => {
+  var rows = res.daftarAktivitas.filter(function(a) {
+    if (dapurFilter === 'semua') return true;
+    return (a.kategori || kategoriLogDash(a.jenis)) === dapurFilter;
+  });
+  if (rows.length === 0) {
+    wrap.innerHTML = '<div class="dapur-row is-empty"><span class="dapur-jenis">Tidak ada aktivitas untuk filter ini.</span></div>';
+    return;
+  }
+
+  rows.forEach((a) => {
     const negatif = (Math.sign(a.jumlah || 0) === -1);
     const row = document.createElement('div');
     row.className = 'dapur-row';

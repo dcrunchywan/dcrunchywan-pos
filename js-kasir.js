@@ -288,6 +288,28 @@
     }).flat();
   }
 
+  // Filter riwayat: Semua | Stok | Dapur. Data server menyertakan kolom
+  // kategori; kalau kosong (data lama) diturunkan dari nama aktivitas.
+  let kasirLogFilter = 'semua';
+  let kasirLogTerakhir = null;
+
+  function kategoriLogKlien(jenis) {
+    const j = (jenis || '').toString().toLowerCase();
+    if (j.indexOf('goreng') !== -1 || j.indexOf('minyak') !== -1) return 'DAPUR';
+    if (j.indexOf('jual') !== -1 || j.indexOf('void') !== -1 || j.indexOf('penjualan') !== -1) return 'PENJUALAN';
+    return 'STOK';
+  }
+
+  function setKasirLogFilter(f) {
+    kasirLogFilter = f;
+    const map = { semua: 'kasirLogFilterSemua', STOK: 'kasirLogFilterStok', DAPUR: 'kasirLogFilterDapur' };
+    Object.keys(map).forEach(function(k) {
+      const el = document.getElementById(map[k]);
+      if (el) el.classList.toggle('active', k === f);
+    });
+    if (kasirLogTerakhir) renderKasirLogDapurGabungan(kasirLogTerakhir.res, kasirLogTerakhir.isEstimasi, kasirLogTerakhir.waktu);
+  }
+
   function renderKasirLogDapurGabungan(resServer, isEstimasi, waktuCacheIso) {
     const container = document.getElementById('kasirLogDapurContainer');
     const labelEl = document.getElementById('kasirLogPeriodeLabel');
@@ -296,14 +318,19 @@
     if (labelEl) labelEl.textContent = periode;
 
     const daftarServer = Array.isArray(resServer.daftarAktivitas) ? resServer.daftarAktivitas.slice() : [];
+    kasirLogTerakhir = { res: resServer, isEstimasi: !!isEstimasi, waktu: waktuCacheIso };
     // Pending hanya ditampilkan jika melihat hari ini (bukan histori owner tanggal lain)
     // Server sudah desc (terbaru atas), pending adalah yang PALING baru → taruh di paling atas, di-reverse agar pending terbaru paling atas
     const tampilkanPending = !isOwnerAuthenticated || isKasirLogPickerHariIni();
     let pendingList = tampilkanPending ? buildPendingAktivitasUntukHariIni() : [];
     if (pendingList.length > 1) pendingList = pendingList.slice().reverse();
     const gabungan = pendingList.concat(daftarServer);
+    const tampil = gabungan.filter(function(a) {
+      if (kasirLogFilter === 'semua') return true;
+      return kategoriLogKlien(a.jenis) === kasirLogFilter;
+    });
 
-    if (gabungan.length === 0) {
+    if (tampil.length === 0) {
       container.innerHTML = '<div class="text-center text-muted py-3 extra-small">Belum ada aktivitas hari ini.</div>';
       if (isEstimasi) setKasirLogStatusBadge('estimasi', waktuCacheIso ? new Date(waktuCacheIso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '');
       else if (daftarServer.length === 0 && pendingList.length === 0) setKasirLogStatusBadge('terkini');
@@ -311,7 +338,7 @@
     }
 
     let html = '';
-    gabungan.forEach(function(a) {
+    tampil.forEach(function(a) {
       const isPending = !!a.pending;
       const jamTampil = a.jam || '--:--';
       const jumlah = Number(a.jumlah) || 0;
