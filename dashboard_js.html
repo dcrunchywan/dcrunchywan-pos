@@ -739,34 +739,51 @@ function muatSnapshotStok() {
 function gambarSnapshotStok(res) {
   var wrap = document.getElementById('snapStokList');
   if (!wrap) return;
+  wrap.innerHTML = '';
   var daftar = (res && res.daftar) ? res.daftar.slice() : [];
   if (daftar.length === 0) {
-    wrap.innerHTML = '<div class="snap-empty">Belum ada snapshot. Baris pertama akan tercatat otomatis hari ini.</div>';
+    var kosong = document.createElement('div');
+    kosong.className = 'snap-empty';
+    kosong.textContent = 'Belum ada snapshot. Baris pertama akan tercatat otomatis hari ini.';
+    wrap.appendChild(kosong);
     return;
   }
   daftar.sort(function(a, b) { return kunciTglSnap(a.tanggal) - kunciTglSnap(b.tanggal); });
 
-  var html = '<div class="snap-row snap-head"><span>Tanggal</span><span>Freezer</span><span>Etalase</span><span>Minyak</span><span>Δ Freezer</span></div>';
+  var judul = ['Tanggal', 'Freezer', 'Etalase', 'Minyak', 'Delta Freezer'];
+  var head = document.createElement('div');
+  head.className = 'snap-row snap-head';
+  judul.forEach(function(t) {
+    var sp = document.createElement('span');
+    sp.textContent = t;
+    head.appendChild(sp);
+  });
+  wrap.appendChild(head);
+
   var mulai = daftar.length - 10;
   if (Math.sign(mulai) === -1) mulai = 0;
   for (var i = daftar.length - 1; i >= mulai; i--) {
     var d = daftar[i];
-    var delta = '—', kelas = 'snap-delta';
+    var delta = '-', kelas = 'snap-delta';
     if (i > 0) {
       var beda = Number(d.freezer) - Number(daftar[i - 1].freezer);
       delta = (beda > 0 ? '+' : '') + beda;
       if (beda > 0) kelas = 'snap-delta naik';
       else if (Math.sign(beda) === -1) kelas = 'snap-delta turun';
     }
-    html += '<div class="snap-row">'
-      + '<span class="snap-tgl">' + d.tanggal + '</span>'
-      + '<span class="snap-val">' + d.freezer + '</span>'
-      + '<span class="snap-val">' + d.etalase + '</span>'
-      + '<span class="snap-val">' + d.minyak + '</span>'
-      + '<span class="' + kelas + '">' + delta + '</span>'
-      + '</div>';
+    var row = document.createElement('div');
+    row.className = 'snap-row';
+    var nilaix = [d.tanggal, d.freezer, d.etalase, d.minyak, delta];
+    nilaix.forEach(function(v, idx) {
+      var sp = document.createElement('span');
+      if (idx === 0) sp.className = 'snap-tgl';
+      else if (idx === 1 || idx === 2 || idx === 3) sp.className = 'snap-val';
+      else sp.className = kelas;
+      sp.textContent = v;
+      row.appendChild(sp);
+    });
+    wrap.appendChild(row);
   }
-  wrap.innerHTML = html;
 }
 
 function gambarRekonsiliasi(res) {

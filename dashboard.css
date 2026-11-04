@@ -617,6 +617,27 @@ html, body {
 /* ---------- Responsive ---------- */
 @media (max-width: 720px) {
   .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  .dash-shell { padding: 14px 12px 60px; }
+  .dash-topbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .brand { flex-direction: row; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  /* Navbar bisa digeser ke samping di HP, tidak lagi melebar keluar layar */
+  .mode-switch {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    border-radius: 14px;
+  }
+  .mode-switch::-webkit-scrollbar { display: none; }
+  .mode-btn { flex: 0 0 auto; white-space: nowrap; padding: 8px 14px; }
 }
 @media (max-width: 420px) {
   .hero-figure { font-size: 2rem; }
