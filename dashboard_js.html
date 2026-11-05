@@ -12,7 +12,7 @@ let sedangMuat = false;
 // Versi dashboard — tampil di header ("Dashboard Owner · vX.Y").
 // Naikkan setiap rilis supaya owner bisa pastikan tablet/browser
 // sudah memuat kode terbaru (bukan cache lama).
-const APP_VERSION = '2.22';
+const APP_VERSION = '2.24';
 
 function formatRupiahDash(angka) {
   return 'Rp ' + Math.round(Number(angka) || 0).toLocaleString('id-ID');
@@ -731,9 +731,29 @@ function kunciTglSnap(t) {
   return Number(p[2]) * 10000 + Number(p[1]) * 100 + Number(p[0]);
 }
 
+function catatSnapshotSekarang() {
+  google.script.run.withSuccessHandler(function() { muatSnapshotStok(); })
+    .withFailureHandler(function() {})
+    .catatSnapshotStokHarian('MANUAL');
+}
+
+function tutupHariSnapshot() {
+  if (!confirm('Tutup hari ini? Angka snapshot akan dikunci sebagai penutupan.')) return;
+  google.script.run.withSuccessHandler(function() { muatSnapshotStok(); })
+    .withFailureHandler(function() {})
+    .catatSnapshotStokHarian('PENUTUPAN');
+}
+
 function muatSnapshotStok() {
   google.script.run.withSuccessHandler(gambarSnapshotStok).withFailureHandler(function() {})
     .ambilStokHarian();
+}
+
+function tglHariIniSnap() {
+  var d = new Date();
+  var dd = String(d.getDate()).padStart(2, '0');
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  return dd + '/' + mm + '/' + d.getFullYear();
 }
 
 function gambarSnapshotStok(res) {
@@ -742,13 +762,45 @@ function gambarSnapshotStok(res) {
   wrap.innerHTML = '';
   var daftar = (res && res.daftar) ? res.daftar.slice() : [];
   if (daftar.length === 0) {
-    var kosong = document.createElement('div');
-    kosong.className = 'snap-empty';
-    kosong.textContent = 'Belum ada snapshot. Baris pertama akan tercatat otomatis hari ini.';
-    wrap.appendChild(kosong);
+    var kosong0 = document.createElement('div');
+    kosong0.className = 'snap-empty';
+    kosong0.textContent = 'Belum ada snapshot. Baris pertama akan tercatat otomatis hari ini.';
+    wrap.appendChild(kosong0);
     return;
   }
   daftar.sort(function(a, b) { return kunciTglSnap(a.tanggal) - kunciTglSnap(b.tanggal); });
+
+  var hariIni = tglHariIniSnap();
+  var berjalan = null;
+  var selesai = [];
+  daftar.forEach(function(d) {
+    if (d.tanggal === hariIni) berjalan = d;
+    else selesai.push(d);
+  });
+
+  // Baris hari ini = stok BERJALAN, bukan penutupan.
+  if (berjalan) {
+    var info = document.createElement('div');
+    info.className = 'snap-live';
+    var jam = '';
+    if (berjalan.dicatatPada) {
+      try { jam = new Date(berjalan.dicatatPada).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }); } catch (e) {}
+    }
+    info.textContent = 'Hari ini (berjalan): Freezer ' + berjalan.freezer + ' · Etalase ' + berjalan.etalase + ' · Minyak ' + berjalan.minyak + (jam ? ' · diperbarui ' + jam : '');
+    wrap.appendChild(info);
+    var ket = document.createElement('div');
+    ket.className = 'snap-note';
+    ket.textContent = 'Angka ini masih bergerak mengikuti transaksi. Klik "Tutup hari" saat tutup toko untuk mengunci jadi snapshot penutupan.';
+    wrap.appendChild(ket);
+  }
+
+  if (selesai.length === 0) {
+    var kosong = document.createElement('div');
+    kosong.className = 'snap-empty';
+    kosong.textContent = 'Belum ada hari yang ditutup. Snapshot penutupan pertama muncul besok.';
+    wrap.appendChild(kosong);
+    return;
+  }
 
   var judul = ['Tanggal', 'Freezer', 'Etalase', 'Minyak', 'Delta Freezer'];
   var head = document.createElement('div');
@@ -760,13 +812,13 @@ function gambarSnapshotStok(res) {
   });
   wrap.appendChild(head);
 
-  var mulai = daftar.length - 10;
+  var mulai = selesai.length - 10;
   if (Math.sign(mulai) === -1) mulai = 0;
-  for (var i = daftar.length - 1; i >= mulai; i--) {
-    var d = daftar[i];
+  for (var i = selesai.length - 1; i >= mulai; i--) {
+    var d = selesai[i];
     var delta = '-', kelas = 'snap-delta';
     if (i > 0) {
-      var beda = Number(d.freezer) - Number(daftar[i - 1].freezer);
+      var beda = Number(d.freezer) - Number(selesai[i - 1].freezer);
       delta = (beda > 0 ? '+' : '') + beda;
       if (beda > 0) kelas = 'snap-delta naik';
       else if (Math.sign(beda) === -1) kelas = 'snap-delta turun';

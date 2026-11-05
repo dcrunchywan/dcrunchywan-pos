@@ -630,12 +630,30 @@ function catatSnapshotStokHarian(sumber) {
     }
     var stok = ambilInfoStokAyam();
     if (barisHariIni) {
-      // Baris hari ini selalu diperbarui → nilai terakhir hari itu = stok penutup.
+      var sumberLama = (sh.getRange(barisHariIni, 6).getValue() || "").toString().toUpperCase();
+      // Hari yang sudah ditutup tidak boleh berubah lagi oleh update otomatis.
+      if (sumberLama === "PENUTUPAN" && sumber !== "MANUAL" && sumber !== "PENUTUPAN") {
+        return "Sudah ditutup: " + tgl;
+      }
+      // Baris hari ini diperbarui → nilai terakhir hari itu = stok penutup.
       sh.getRange(barisHariIni, 2, 1, 5).setValues([[stok.stokMentah, stok.stokEtalase, stok.stokMinyakBaku, new Date(), sumber]]);
-      return "Diperbarui: " + tgl;
+    } else {
+      sh.appendRow([tgl, stok.stokMentah, stok.stokEtalase, stok.stokMinyakBaku, new Date(), sumber]);
     }
-    sh.appendRow([tgl, stok.stokMentah, stok.stokEtalase, stok.stokMinyakBaku, new Date(), sumber]);
-    return "Dicatat: " + tgl;
+    // Tandai semua hari yang sudah lewat sebagai PENUTUPAN (nilainya sudah
+    // beku karena tidak pernah ditulis lagi setelah hari berganti).
+    var akhir = getRealLastRow(sh);
+    if (akhir >= 2) {
+      var semua = sh.getRange(2, 1, akhir - 1, 6).getValues();
+      for (var k = 0; k < semua.length; k++) {
+        var tglBaris = _tglSnapshotTeks(semua[k][0]);
+        var sumberBaris = (semua[k][5] || "").toString().toUpperCase();
+        if (tglBaris && tglBaris !== tgl && sumberBaris !== "PENUTUPAN") {
+          sh.getRange(k + 2, 6).setValue("PENUTUPAN");
+        }
+      }
+    }
+    return barisHariIni ? ("Diperbarui: " + tgl) : ("Dicatat: " + tgl);
   } catch (e) {
     return "Error: " + e.toString();
   } finally {
@@ -658,6 +676,9 @@ function _pastikanSnapshotStokHarian() {
 // dd/MM/yyyy supaya tidak berubah jadi Date oleh Sheets.
 function ambilStokHarian(bulan, tahun) {
   try {
+    // Pastikan baris hari ini ada begitu snapshot dibuka/dibaca, tanpa
+    // menunggu ada yang membuka tab Dapur kasir lebih dulu.
+    try { _pastikanSnapshotStokHarian(); } catch (ePasti) {}
     var sh = _sheetStokHarian();
     var last = getRealLastRow(sh);
     if (last < 2) return { status: "ok", daftar: [] };
